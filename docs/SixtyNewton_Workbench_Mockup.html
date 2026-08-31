@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sixty Newton Estimating Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --shell:#F1F2F4; --paper:#FFFFFF; --ink:#1F2328; --ink2:#5B636E; --ink3:#8A929C; --rule:#E2E5E9; --rule2:#CFD4DA;
+  --gold:#B8953F; --gold-soft:#F6F0DF; --floor:#4A6B8A; --floor-soft:#E9EFF5; --amber:#B8741A; --amber-soft:#FBF1E0; --red:#A83232; --red-soft:#F9E7E7; --green:#3E7A4E; --green-soft:#E6F1E8;
+  --sans:'Source Sans 3',system-ui,sans-serif; --serif:'Source Serif 4',Georgia,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--shell);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.4;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:260px 1fr 380px;height:100vh;min-width:1180px}
+
+/* ---------- left rail ---------- */
+.rail{background:var(--shell);border-right:1px solid var(--rule2);display:flex;flex-direction:column;overflow:hidden}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 12px}
+.mark{width:26px;height:22px;position:relative}
+.mark:before{content:"";position:absolute;left:3px;top:0;width:12px;height:12px;border:2px solid var(--gold);border-right:0;border-bottom:0;transform:rotate(45deg) translate(2px,4px)}
+.mark:after{content:"";position:absolute;left:0;bottom:2px;width:26px;height:2px;background:var(--gold)}
+.brand b{font-family:var(--serif);font-weight:600;font-size:16px;letter-spacing:.2px}
+.brand small{display:block;font-size:11px;color:var(--ink3);letter-spacing:.06em}
+.newq{margin:4px 12px 10px;padding:9px 12px;border:1px solid var(--rule2);border-radius:8px;background:var(--paper);text-align:left;display:flex;justify-content:space-between;align-items:center}
+.newq:hover{border-color:var(--gold)}
+.newq kbd{font-size:11px;color:var(--ink3);border:1px solid var(--rule2);border-radius:4px;padding:0 5px}
+.search{margin:0 12px 10px;padding:7px 10px;border:1px solid var(--rule2);border-radius:8px;background:var(--paper);color:var(--ink3);display:flex;gap:8px;align-items:center}
+.clients{overflow:auto;padding:0 8px 16px;flex:1}
+.client{margin-top:8px}
+.client>button{width:100%;text-align:left;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;border-radius:6px;color:var(--ink)}
+.client>button:hover{background:#E8EAEE}
+.client>button span:last-child{color:var(--ink3);font-size:12px}
+.client ul{list-style:none;margin:2px 0 0;padding:0 0 0 8px}
+.client li a{display:block;padding:6px 10px;border-radius:6px;color:var(--ink2);text-decoration:none;display:grid;grid-template-columns:1fr auto;gap:8px}
+.client li a:hover{background:#E8EAEE}
+.client li a.on{background:var(--paper);color:var(--ink);box-shadow:inset 3px 0 0 var(--gold)}
+.client li a em{font-style:normal;color:var(--ink3);font-size:12px}
+.client li a .st{font-size:11px;padding:1px 6px;border-radius:10px;background:#E4E7EB;color:var(--ink2);align-self:center}
+.client li a .st.won{background:var(--green-soft);color:var(--green)}
+.client li a .st.rev{background:var(--amber-soft);color:var(--amber)}
+.railfoot{padding:10px 16px;border-top:1px solid var(--rule2);font-size:12px;color:var(--ink3);display:flex;justify-content:space-between}
+
+/* ---------- centre ---------- */
+.main{overflow:auto;background:var(--shell);padding:18px 26px 60px}
+.doc{background:var(--paper);border:1px solid var(--rule2);border-radius:10px;max-width:980px;margin:0 auto}
+.dochead{padding:20px 28px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.dochead h1{font-family:var(--serif);font-weight:600;font-size:22px;margin:0 0 2px}
+.dochead .sub{color:var(--ink2)}
+.dochead .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{border:1px solid var(--rule2);border-radius:14px;padding:3px 10px;font-size:12px;color:var(--ink2);background:var(--paper)}
+.chip.gold{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+.actions{display:flex;gap:8px;flex-shrink:0}
+.btn{padding:8px 12px;border-radius:7px;border:1px solid var(--rule2);background:var(--paper);font-weight:500}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:hover{border-color:var(--ink2)}
+.btn.primary:hover{background:#000}
+
+.ledgerhead{display:grid;grid-template-columns:28px 1fr 88px 56px 92px 92px 92px 26px;gap:8px;padding:14px 28px 6px;margin-top:14px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-size:12px;color:var(--ink3);position:sticky;top:-18px;background:var(--paper);z-index:2}
+.ledgerhead .n{text-align:right}
+.ledgerhead .floor{color:var(--floor)}
+.ledgerhead .quoted{color:var(--gold)}
+
+.disc{padding:0 28px}
+.disc h2{font-family:var(--serif);font-weight:500;font-size:15px;margin:16px 0 4px;display:flex;justify-content:space-between;align-items:baseline}
+.disc h2 span{font-family:var(--sans);font-size:12px;color:var(--ink3);font-weight:400}
+.line{display:grid;grid-template-columns:28px 1fr 88px 56px 92px 92px 92px 26px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--rule)}
+.line:last-child{border-bottom:0}
+.line.off{color:var(--ink3)}
+.line.off .n{color:var(--ink3)}
+.tick{width:18px;height:18px;border:1.5px solid var(--rule2);border-radius:4px;display:grid;place-items:center;background:var(--paper)}
+.tick.on{background:var(--ink);border-color:var(--ink)}
+.tick.on:after{content:"";width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(45deg) translate(-1px,-1px)}
+.desc b{font-weight:500;display:block}
+.desc small{color:var(--ink3);display:block;font-size:12px}
+.qty{text-align:right}
+.qty input{width:78px;text-align:right;border:1px solid transparent;border-radius:5px;padding:3px 6px;background:transparent}
+.qty input:hover,.qty input:focus{border-color:var(--rule2);background:var(--paper);outline:none}
+.unit{color:var(--ink3);font-size:12px}
+.n{text-align:right;font-weight:500}
+.n.floor{color:var(--floor)}
+.n.quoted{color:var(--gold)}
+.n.quoted input{width:88px;text-align:right;border:1px solid transparent;border-radius:5px;padding:3px 6px;background:transparent;color:var(--gold);font-weight:500}
+.n.quoted input:hover,.n.quoted input:focus{border-color:var(--gold);background:var(--gold-soft);outline:none}
+.flag{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600}
+.flag.amber{background:var(--amber-soft);color:var(--amber)}
+.flag.red{background:var(--red-soft);color:var(--red)}
+.addline{padding:8px 0 4px;color:var(--ink3);display:flex;gap:6px;align-items:center}
+.addline:hover{color:var(--ink)}
+
+.vars{margin:18px 28px 0;padding:14px 16px;border:1px dashed var(--rule2);border-radius:8px}
+.vars h3{margin:0 0 8px;font-weight:600;font-size:13px;display:flex;justify-content:space-between}
+.vars h3 span{color:var(--ink3);font-weight:400}
+.fx{display:flex;flex-wrap:wrap;gap:8px}
+.fxi{display:flex;align-items:center;gap:8px;border:1px solid var(--rule2);border-radius:8px;padding:6px 10px;background:var(--paper)}
+.fxi label{color:var(--ink2);font-size:13px}
+.fxi input[type=number]{width:56px;border:0;border-bottom:1px solid var(--rule2);text-align:right;padding:1px 2px;background:transparent}
+.fxi input[type=number]:focus{outline:none;border-color:var(--gold)}
+.fxi .sw{width:30px;height:18px;border-radius:9px;background:var(--rule2);position:relative;transition:background .15s}
+.fxi .sw:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.fxi .sw.on{background:var(--ink)}
+.fxi .sw.on:after{left:14px}
+.fxi.add{border-style:dashed;color:var(--ink3)}
+.fxi .eff{font-size:12px;color:var(--ink3);margin-left:4px}
+
+.totals{margin:18px 28px 0;border-top:2px solid var(--ink);padding-top:10px}
+.trow{display:grid;grid-template-columns:1fr 92px 92px 92px 26px;gap:8px;padding:5px 0;align-items:baseline}
+.trow .l{color:var(--ink2)}
+.trow.sum{border-top:1px solid var(--rule);margin-top:4px;padding-top:9px;font-size:15px}
+.trow.sum .l{color:var(--ink);font-weight:600}
+.trow .note{grid-column:1/-1;font-size:12px;color:var(--ink3);padding-top:0}
+
+.history{margin:22px 28px 22px;padding-top:14px;border-top:1px solid var(--rule)}
+.history h3{font-family:var(--serif);font-weight:500;font-size:15px;margin:0 0 8px}
+.hrow{display:grid;grid-template-columns:110px 1fr 92px 92px 92px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule);color:var(--ink2)}
+.hrow:last-child{border-bottom:0}
+.hrow .n{color:var(--ink)}
+.hrow .n.floor{color:var(--floor)}
+.hrow .n.quoted{color:var(--gold)}
+.hhead{font-size:12px;color:var(--ink3);border-bottom:1px solid var(--rule)}
+.hhead .n{color:var(--ink3);font-weight:400}
+
+/* ---------- right ---------- */
+.side{background:var(--paper);border-left:1px solid var(--rule2);display:flex;flex-direction:column;overflow:hidden}
+.calc{position:sticky;top:0;padding:12px 14px 10px;border-bottom:1px solid var(--rule);background:var(--paper);z-index:3}
+.calc .disp{border:1px solid var(--rule2);border-radius:8px;padding:8px 10px;text-align:right;background:var(--shell)}
+.calc .disp small{display:block;font-size:11px;color:var(--ink3);min-height:14px}
+.calc .disp b{font-size:20px;font-weight:500}
+.calc .keys{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px}
+.calc .keys button{padding:6px 0;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px}
+.calc .keys button:hover{border-color:var(--ink2)}
+.calc .keys button.op{background:var(--shell)}
+.calc .keys button.eq{background:var(--ink);color:#fff;border-color:var(--ink)}
+.calc .keys button.use{grid-column:span 2;background:var(--gold-soft);color:var(--gold);border-color:var(--gold)}
+.calc .tag{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);margin-bottom:6px}
+
+.thread{flex:1;overflow:auto;padding:14px 14px 10px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:100%}
+.msg .who{font-size:11px;color:var(--ink3);margin-bottom:3px}
+.msg p{margin:0 0 6px}
+.msg.me{align-self:flex-end;background:var(--shell);border-radius:10px;padding:8px 12px;max-width:88%}
+.nudge{border-left:3px solid var(--amber);background:var(--amber-soft);padding:8px 10px;border-radius:0 8px 8px 0;margin:4px 0}
+.nudge.red{border-color:var(--red);background:var(--red-soft)}
+.nudge.info{border-color:var(--floor);background:var(--floor-soft)}
+.nudge b{font-weight:600}
+.nudge .act{display:flex;gap:6px;margin-top:6px}
+.nudge .act button{font-size:12px;padding:3px 9px;border:1px solid var(--rule2);border-radius:6px;background:var(--paper)}
+.nudge .act button:hover{border-color:var(--ink2)}
+.compare{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;font-size:13px;margin-top:4px}
+.compare span:nth-child(3n+2),.compare span:nth-child(3n+3){text-align:right;font-weight:500}
+.compare .h{color:var(--ink3);font-weight:400;font-size:11px}
+.compose{padding:10px 14px 14px;border-top:1px solid var(--rule)}
+.compose .box{border:1px solid var(--rule2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.compose .box:focus-within{border-color:var(--ink2)}
+.compose input{border:0;width:100%;outline:none;background:transparent}
+.compose .tools{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ink3)}
+.compose .send{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center}
+
+:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ================= LEFT RAIL ================= -->
+<aside class="rail">
+  <div class="brand"><div class="mark"></div><div><b>SixtyNewton</b><small>Estimating</small></div></div>
+  <button class="newq">New quote <kbd>N</kbd></button>
+  <div class="search">&#9906; Search quotes, sites, products</div>
+  <div class="clients">
+    <div class="client"><button><span>Jumeirah Bay</span><span>2</span></button>
+      <ul>
+        <li><a class="on" href="#">QT-000299 R2 Podium tiling and WP<em>22 Aug</em><span class="st rev">Revised</span></a></li>
+        <li><a href="#">QT-000299 R1 with demolition<em>22 Aug</em><span class="st">Superseded</span></a></li>
+      </ul></div>
+    <div class="client"><button><span>Arabian Furniture (Police HQ)</span><span>2</span></button>
+      <ul>
+        <li><a href="#">QT-000298 R2 Self-levelling 2,000 sqm<em>22 Aug</em><span class="st">Issued</span></a></li>
+        <li><a href="#">QT-000298 R1<em>22 Aug</em><span class="st">Superseded</span></a></li>
+      </ul></div>
+    <div class="client"><button><span>Nabd Al Badia (Carrefour)</span><span>2</span></button>
+      <ul>
+        <li><a href="#">QT-000296 R2 Epoxy 1,300 sqm<em>22 Aug</em><span class="st rev">Below floor</span></a></li>
+      </ul></div>
+    <div class="client"><button><span>CATIC</span><span>1</span></button>
+      <ul><li><a href="#">QT-000301 Membrane WP<em>24 Aug</em><span class="st">Issued</span></a></li></ul></div>
+    <div class="client"><button><span>Yas Island Villa</span><span>2</span></button>
+      <ul><li><a href="#">QT-000302 R2 Pool mosaic<em>25 Aug</em><span class="st won">Won</span></a></li></ul></div>
+    <div class="client"><button><span>Bugatti Showroom</span><span>4</span></button>
+      <ul><li><a href="#">QT-000288 R4 Microresina 400 sqm<em>17 Jul</em><span class="st">Issued</span></a></li></ul></div>
+    <div class="client"><button><span>Marriott Downtown AUH</span><span>3</span></button>
+      <ul><li><a href="#">QT-000275 Carpet and skirting<em>15 Jun</em><span class="st won">Won</span></a></li></ul></div>
+    <div class="client"><button><span>Emirates Hills</span><span>1</span></button>
+      <ul><li><a href="#">QT-000261 Tile 600 sqm<em>14 May</em><span class="st won">Won</span></a></li></ul></div>
+  </div>
+  <div class="railfoot"><span>Tarun</span><span>Products synced 02:10</span></div>
+</aside>
+
+<!-- ================= CENTRE ================= -->
+<main class="main">
+  <div class="doc">
+    <div class="dochead">
+      <div>
+        <h1>QT-000299 R2 &nbsp;Jumeirah Bay podium: screed, waterproofing, tiling</h1>
+        <div class="sub">Bill to Jumeirah Bay &nbsp;&middot;&nbsp; Site Jumeirah Bay Island, Dubai &nbsp;&middot;&nbsp; 350 sqm &nbsp;&middot;&nbsp; 22 Aug 2026, valid 15 days</div>
+        <div class="meta">
+          <span class="chip gold">Site profile: Island, restricted</span>
+          <span class="chip">Labour multiplier 1.8</span>
+          <span class="chip">Tiles by client</span>
+          <span class="chip">Tax exclusive 5%</span>
+          <span class="chip">Payment 50 / 40 / 10</span>
+        </div>
+      </div>
+      <div class="actions"><button class="btn">Preview PDF</button><button class="btn primary">Issue R2</button></div>
+    </div>
+
+    <div class="ledgerhead">
+      <span></span><span>Stage and product</span><span class="n">Qty</span><span></span>
+      <span class="n floor">Cost floor</span><span class="n">Calculated</span><span class="n quoted">Quoted</span><span></span>
+    </div>
+
+    <section class="disc" data-disc="prep">
+      <h2>Surface preparation <span>2 of 3 stages</span></h2>
+      <div class="line" data-floor="86" data-calc="98" data-quoted="85.7" data-unit="sqm"><button class="tick on" aria-label="include"></button>
+        <div class="desc"><b>Demolition and surface preparation</b><small>Labour and machine, disposal by Sixty Newton</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">86</span><span class="n calc">98</span><span class="n quoted"><input value="85.7"></span><span class="flag red" title="Below cost floor">!</span></div>
+      <div class="line off" data-floor="12" data-calc="15" data-quoted="15" data-unit="sqm"><button class="tick" aria-label="include"></button>
+        <div class="desc"><b>Floor grinding</b><small>Not needed after demolition</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">12</span><span class="n calc">15</span><span class="n quoted"><input value="15"></span><span></span></div>
+      <div class="line" data-floor="55" data-calc="72" data-quoted="60" data-unit="lump" data-lump="1"><button class="tick on" aria-label="include"></button>
+        <div class="desc"><b>Garbage disposal and protection</b><small>Skips × 6, protection sheeting, island barge surcharge</small></div>
+        <div class="qty"><input value="1"></div><span class="unit">lump</span>
+        <span class="n floor">33,900</span><span class="n calc">45,200</span><span class="n quoted"><input value="42,000"></span><span class="flag amber" title="Below calculated">!</span></div>
+    </section>
+
+    <section class="disc">
+      <h2>Self-levelling and screed <span>1 of 2 stages</span></h2>
+      <div class="line" data-floor="112" data-calc="171" data-quoted="205" data-unit="sqm"><button class="tick on"></button>
+        <div class="desc"><b>Screed 5 cm with anti-fracture membrane</b><small>Topcem 2.5 kg/sqm/cm + site sand, Mapetex Sel, heavy application tier</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">112</span><span class="n calc">171</span><span class="n quoted"><input value="205"></span><span></span></div>
+      <div class="line off" data-floor="19" data-calc="57" data-quoted="55" data-unit="sqm"><button class="tick"></button>
+        <div class="desc"><b>Self-levelling 5 mm</b><small>Ultraplan Eco 20, Primer G</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">19</span><span class="n calc">57</span><span class="n quoted"><input value="55"></span><span></span></div>
+    </section>
+
+    <section class="disc">
+      <h2>Waterproofing <span>1 of 3 stages</span></h2>
+      <div class="line" data-floor="63" data-calc="121" data-quoted="95" data-unit="sqm"><button class="tick on"></button>
+        <div class="desc"><b>Purtop 500 N, 2 mm sprayed</b><small>1.05 kg/sqm/mm, 8% overspray, Primer SN, rig hire 3 days</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">63</span><span class="n calc">121</span><span class="n quoted"><input value="95"></span><span class="flag amber" title="Below calculated">!</span></div>
+      <div class="line off" data-floor="35" data-calc="110" data-quoted="110" data-unit="sqm"><button class="tick"></button>
+        <div class="desc"><b>Mapelastic Smart system with Mapenet 150</b><small>R1 option, replaced by Purtop in R2</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">35</span><span class="n calc">110</span><span class="n quoted"><input value="110"></span><span></span></div>
+      <div class="line off" data-floor="3" data-calc="9" data-quoted="0" data-unit="lump" data-lump="1"><button class="tick"></button>
+        <div class="desc"><b>Flood test 48 hr and IR</b><small>Included free in R1 notes</small></div>
+        <div class="qty"><input value="1"></div><span class="unit">lump</span>
+        <span class="n floor">1,200</span><span class="n calc">1,800</span><span class="n quoted"><input value="0"></span><span></span></div>
+    </section>
+
+    <section class="disc">
+      <h2>Tile and stone works <span>2 of 3 stages</span></h2>
+      <div class="line" data-floor="14" data-calc="148" data-quoted="160" data-unit="sqm"><button class="tick on"></button>
+        <div class="desc"><b>Tile installation with adhesive, client tiles</b><small>Keraflex Maxi S1 6 kg/sqm back-buttered, clips, heavy tier × 1.8 island</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">14</span><span class="n calc">148</span><span class="n quoted"><input value="160"></span><span></span></div>
+      <div class="line" data-floor="13" data-calc="52" data-quoted="55" data-unit="sqm"><button class="tick on"></button>
+        <div class="desc"><b>Grout and perimeter sealant</b><small>Ultracolor Plus 1.2 kg/sqm at 60x120, 3 mm; Mapesil AC</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">13</span><span class="n calc">52</span><span class="n quoted"><input value="55"></span><span></span></div>
+      <div class="line off" data-floor="22" data-calc="63" data-quoted="60" data-unit="sqm"><button class="tick"></button>
+        <div class="desc"><b>Epoxy grout upgrade</b><small>Kerapoxy 0.6 kg/sqm at 1.5 mm</small></div>
+        <div class="qty"><input value="350"></div><span class="unit">sqm</span>
+        <span class="n floor">22</span><span class="n calc">63</span><span class="n quoted"><input value="60"></span><span></span></div>
+      <button class="addline">+ Add a stage from Tile and stone works</button>
+    </section>
+
+    <section class="disc">
+      <h2>Access and site <span>1 of 2 stages</span></h2>
+      <div class="line" data-floor="11500" data-calc="14200" data-quoted="15000" data-unit="lump" data-lump="1"><button class="tick on"></button>
+        <div class="desc"><b>Scaffolding provision</b><small>Hire 21 days, island delivery, erect and strike</small></div>
+        <div class="qty"><input value="1"></div><span class="unit">lump</span>
+        <span class="n floor">11,500</span><span class="n calc">14,200</span><span class="n quoted"><input value="15,000"></span><span></span></div>
+      <div class="line off" data-floor="2400" data-calc="3100" data-quoted="0" data-unit="lump" data-lump="1"><button class="tick"></button>
+        <div class="desc"><b>Mobilisation and barge transport</b><small>4 trips at island rate; currently absorbed in labour multiplier</small></div>
+        <div class="qty"><input value="1"></div><span class="unit">lump</span>
+        <span class="n floor">2,400</span><span class="n calc">3,100</span><span class="n quoted"><input value="0"></span><span></span></div>
+      <button class="addline">+ Add a stage from any discipline</button>
+    </section>
+
+    <div class="vars">
+      <h3>Variables on this quote <span>each one changes the calculated column</span></h3>
+      <div class="fx">
+        <div class="fxi"><label>Site hours per day</label><input type="number" id="vHours" value="6" min="1" max="12"><span class="eff" id="eHours"></span></div>
+        <div class="fxi"><label>Deadline, calendar days</label><input type="number" id="vDays" value="15" min="1"><span class="eff" id="eDays"></span></div>
+        <div class="fxi"><label>Base programme, crew-days</label><input type="number" id="vBase" value="30" min="1"></div>
+        <div class="fxi"><label>Working days per week</label><input type="number" id="vWeek" value="6" min="1" max="7"></div>
+        <div class="fxi"><label>Noise restricted, hand tools only</label><button class="sw on" id="vNoise" aria-pressed="true"></button><span class="eff">+8% labour</span></div>
+        <div class="fxi"><label>Scaffolding by client</label><button class="sw" id="vScaf" aria-pressed="false"></button></div>
+        <div class="fxi"><label>Margin</label><input type="number" id="vMargin" value="25" min="0" max="80"><span class="eff">%</span></div>
+        <button class="fxi add">+ Add variable</button>
+      </div>
+    </div>
+
+    <div class="totals">
+      <div class="trow"><span class="l">Included stages, base programme</span><span class="n floor" id="tFloor">0</span><span class="n" id="tCalc">0</span><span class="n quoted" id="tQuoted">0</span><span></span></div>
+      <div class="trow"><span class="l" id="lProg">Programme compression</span><span class="n floor" id="pFloor">0</span><span class="n" id="pCalc">0</span><span class="n quoted">in rates</span><span></span></div>
+      <div class="trow"><span class="note" id="progNote"></span></div>
+      <div class="trow"><span class="l">VAT 5%</span><span class="n floor" id="vFloor">0</span><span class="n" id="vCalc">0</span><span class="n quoted" id="vQuoted">0</span><span></span></div>
+      <div class="trow sum"><span class="l">Total AED</span><span class="n floor" id="sFloor">0</span><span class="n" id="sCalc">0</span><span class="n quoted" id="sQuoted">0</span><span></span></div>
+      <div class="trow"><span class="note" id="deltaNote"></span></div>
+    </div>
+
+    <div class="history">
+      <h3>Before and after on this quote</h3>
+      <div class="hrow hhead"><span>Version</span><span>What changed</span><span class="n floor">Cost floor</span><span class="n">Calculated</span><span class="n quoted">Quoted</span></div>
+      <div class="hrow"><span>R1, 22 Aug</span><span>Demolition 30,000 lump, Mapelastic system at 110, 7 lines</span><span class="n floor">148,600</span><span class="n">239,400</span><span class="n quoted">286,125</span></div>
+      <div class="hrow"><span>R2 draft</span><span>Demolition per sqm, Purtop 500 N replaces Mapelastic, flood test dropped</span><span class="n floor" id="hFloor">…</span><span class="n" id="hCalc">…</span><span class="n quoted" id="hQuoted">…</span></div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= RIGHT ================= -->
+<aside class="side">
+  <div class="calc">
+    <div class="tag"><span>Pocket calculator</span><span>Enter to equals</span></div>
+    <div class="disp"><small id="cExpr">&nbsp;</small><b id="cVal">0</b></div>
+    <div class="keys">
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="/">÷</button><button class="op" data-k="(">(</button><button class="op" data-k=")">)</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="op" data-k="*">×</button><button class="op" data-k="%">%</button><button class="op" id="cClr">C</button>
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="op" data-k="-">−</button><button class="op" id="cBack">⌫</button><button class="eq" id="cEq">=</button>
+      <button data-k="0">0</button><button data-k=".">.</button><button class="op" data-k="1.09">×1.09</button><button class="op" data-k="+">+</button><button class="use" id="cUse">Use as quoted rate</button>
+    </div>
+  </div>
+
+  <div class="thread" id="thread">
+    <div class="msg"><div class="who">Assistant, on opening R2</div>
+      <p>Three things on this revision before anything else.</p>
+      <div class="nudge red"><b>Demolition is below cost floor.</b> Quoted 85.7/sqm against a floor of 86 and calculated 98. On R1 this was a 30,000 lump on 350 sqm, the same rate. Island disposal is what moves it.
+        <div class="act"><button>Set to 98</button><button>Show breakdown</button><button>Keep, add reason</button></div></div>
+      <div class="nudge"><b>Purtop 500 N at 95 leaves 32/sqm for application.</b> Material alone is 63 at 2 mm. Your thin-coating tier runs 35 to 40 on flat sites and this one carries a 1.8 island multiplier, so calculated is 121.
+        <div class="compare"><span class="h">History, same stage</span><span class="h">Rate</span><span class="h">Site</span><span>QT-000299 R1 Mapelastic system</span><span>110</span><span>Jumeirah Bay</span><span>QT-000269 generic WP</span><span>95</span><span>Rameena, Dubai</span><span>QT-000301 CM210</span><span>45</span><span>CATIC</span></div>
+        <div class="act"><button>Set to 121</button><button>Explain to client</button></div></div>
+      <div class="nudge info"><b>Flood test was free on R1.</b> You dropped the line in R2. The T&amp;Cs still promise a test before tiling. Either add it back at 1,800 or keep it free and say so in notes.
+        <div class="act"><button>Add back at 0</button><button>Add at 1,800</button></div></div>
+    </div>
+    <div class="msg me"><p>What if they only allow 6 hours a day and want it done in 15 days?</p></div>
+    <div class="msg"><div class="who">Assistant</div>
+      <p id="aiProg">Applied to the variables above. </p>
+      <div class="act" style="display:flex;gap:6px"><button class="btn" style="font-size:12px;padding:4px 9px">Draft the programme note</button><button class="btn" style="font-size:12px;padding:4px 9px">Show crew plan</button></div>
+    </div>
+  </div>
+
+  <div class="compose">
+    <div class="box">
+      <input placeholder="Ask about this quote, or say what to change">
+      <div class="tools"><span>Sonnet 4.6 &nbsp;·&nbsp; 11k tokens on this quote</span><span class="send">↑</span></div>
+    </div>
+  </div>
+</aside>
+</div>
+
+<script>
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const num=s=>parseFloat(String(s).replace(/,/g,''))||0;
+
+function recalc(){
+  let floor=0,calc=0,quoted=0;
+  document.querySelectorAll('.line').forEach(l=>{
+    const on=l.querySelector('.tick').classList.contains('on');
+    l.classList.toggle('off',!on);
+    if(!on) return;
+    const qty=num(l.querySelector('.qty input').value);
+    const isLump=l.dataset.lump==='1';
+    const f=isLump?num(l.querySelector('.n.floor').textContent):num(l.dataset.floor)*qty;
+    const c=isLump?num(l.querySelector('.n.calc').textContent):num(l.dataset.calc)*qty;
+    const q=num(l.querySelector('.n.quoted input').value)*(isLump?1:qty);
+    floor+=f;calc+=c;quoted+=q;
+    const fl=l.querySelector('.flag');
+    const qr=num(l.querySelector('.n.quoted input').value), fr=isLump?f:num(l.dataset.floor), cr=isLump?c:num(l.dataset.calc);
+    if(fl){ fl.className='flag '+(qr<fr?'red':qr<cr?'amber':''); fl.textContent=(qr<cr)?'!':''; fl.title=qr<fr?'Below cost floor':qr<cr?'Below calculated':''; }
+  });
+  // programme compression
+  const hours=num(vHours.value), days=num(vDays.value), base=num(vBase.value), week=num(vWeek.value);
+  const crewHours=base*8, avail=days*hours*(week/7);
+  const crews=Math.max(1,Math.ceil(crewHours/avail));
+  const congestion=0.10*(crews-1);
+  const noise=vNoise.classList.contains('on')?0.08:0;
+  const labourShare=0.55; // share of calculated that is labour in this quote
+  let uplift=calc*labourShare*(congestion+noise) + (crews-1)*3100 + (crews>1?days*650:0);
+  if(vScaf.classList.contains('on')){ const s=document.querySelector('[data-floor="11500"]'); if(s.querySelector('.tick').classList.contains('on')){ floor-=11500; calc-=14200; quoted-=num(s.querySelector('.n.quoted input').value); } }
+  const margin=num(vMargin.value)/100;
+  const pFloorV=uplift*0.8, pCalcV=uplift*(1+margin)/1.25;
+  eHours.textContent = hours<8?`${Math.round((8-hours)/8*100)}% fewer hours`:'';
+  eDays.textContent = crews>1?`${crews} crews`:'1 crew';
+  lProg.textContent = crews>1?`Programme compression, ${crews} crews`:'Programme compression, none';
+  progNote.textContent = crews>1
+    ? `${base} crew-days at 8 h = ${crewHours} crew-hours. Site allows ${hours} h/day for ${days} days on a ${week}-day week = ${Math.round(avail)} hours per crew, so ${crews} crews. Congestion ${Math.round(congestion*100)}%${noise?', noise restriction 8%':''}, ${crews-1} extra mobilisations, supervisor ${days} days.`
+    : `${base} crew-days fit inside ${days} days at ${hours} h/day. No compression cost.`;
+  tFloor.textContent=fmt(floor); tCalc.textContent=fmt(calc); tQuoted.textContent=fmt(quoted);
+  pFloor.textContent=fmt(pFloorV); pCalc.textContent=fmt(pCalcV);
+  const F=floor+pFloorV, C=calc+pCalcV, Q=quoted;
+  vFloor.textContent=fmt(F*0.05); vCalc.textContent=fmt(C*0.05); vQuoted.textContent=fmt(Q*0.05);
+  sFloor.textContent=fmt(F*1.05); sCalc.textContent=fmt(C*1.05); sQuoted.textContent=fmt(Q*1.05);
+  const d=Q-C, pct=C?Math.round(d/C*100):0;
+  deltaNote.textContent = d<0?`Quoted is ${fmt(-d)} (${-pct}%) under calculated. Margin on this quote is ${Math.round((Q-F)/Q*100)}% over floor.`:`Quoted is ${fmt(d)} (${pct}%) over calculated.`;
+  hFloor.textContent=fmt(F); hCalc.textContent=fmt(C); hQuoted.textContent=fmt(Q);
+  aiProg.textContent = crews>1
+    ? `Applied to the variables above. Your scope is ${base} crew-days, which is ${crewHours} crew-hours at 8 hours. A site that allows ${hours} hours a day for ${days} calendar days gives one crew ${Math.round(avail)} hours, so you need ${crews} crews working side by side. Labour hours barely change, but you pay ${crews-1} extra mobilisations and tool sets, a supervisor for all ${days} days, and about ${Math.round(congestion*100)}% productivity loss from crews sharing the deck. The engine puts the compression at ${fmt(pCalcV)} on top of the base. I would show it as its own line so the client sees what the deadline costs them.`
+    : `Applied to the variables above. At ${hours} hours a day over ${days} days one crew has ${Math.round(avail)} hours, which covers the ${crewHours} crew-hours this scope needs. No compression cost.`;
+}
+document.querySelectorAll('.tick').forEach(t=>t.addEventListener('click',()=>{t.classList.toggle('on');recalc();}));
+document.querySelectorAll('.line input').forEach(i=>i.addEventListener('input',recalc));
+['vHours','vDays','vBase','vWeek','vMargin'].forEach(id=>document.getElementById(id).addEventListener('input',recalc));
+[vNoise,vScaf].forEach(b=>b.addEventListener('click',()=>{b.classList.toggle('on');b.setAttribute('aria-pressed',b.classList.contains('on'));recalc();}));
+recalc();
+
+/* pocket calculator */
+let expr='';
+const show=()=>{cExpr.innerHTML=expr||'&nbsp;'; try{ if(expr){ const v=Function('"use strict";return ('+expr.replace(/%/g,'/100')+')')(); if(isFinite(v)) cVal.textContent=Number(v.toFixed(2)).toLocaleString('en-US'); } else cVal.textContent='0'; }catch(e){} };
+document.querySelectorAll('.calc [data-k]').forEach(b=>b.addEventListener('click',()=>{ const k=b.dataset.k; expr+= k==='1.09'?'*1.09':k; show(); }));
+cClr.onclick=()=>{expr='';show();};
+cBack.onclick=()=>{expr=expr.slice(0,-1);show();};
+cEq.onclick=()=>{ try{ const v=Function('"use strict";return ('+expr.replace(/%/g,'/100')+')')(); expr=String(Number(v.toFixed(4))); show(); }catch(e){} };
+cUse.onclick=()=>{ const a=document.activeElement; const target=document.querySelector('.line:not(.off) .n.quoted input'); if(target){ target.value=cVal.textContent; recalc(); target.focus(); } };
+document.addEventListener('keydown',e=>{ if(document.activeElement.tagName==='INPUT') return; if(/^[0-9+\-*/().%]$/.test(e.key)){expr+=e.key;show();} else if(e.key==='Enter'){cEq.onclick();} else if(e.key==='Backspace'){cBack.onclick();} else if(e.key==='Escape'){cClr.onclick();} });
+</script>
+</body>
+</html>
