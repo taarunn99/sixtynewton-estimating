@@ -226,6 +226,11 @@ function LineRow({
               <span>Equipment {fmtRate(line.breakdown.equipment)}</span>
               <span className="font-medium">Cost {fmtRate(line.breakdown.cost)}</span>
               <span className="text-[#4A6B8A]">Floor is cost plus overhead</span>
+              {line.breakdown.crewCostReference !== null ? (
+                <span className="text-[#8A929C]">
+                  Crew cost reference: {fmtRate(line.breakdown.crewCostReference)} per sqm, never applied to the price
+                </span>
+              ) : null}
             </div>
             {line.nudges.length ? (
               <div className="flex flex-wrap gap-x-6 gap-y-1">

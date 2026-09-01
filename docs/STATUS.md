@@ -35,15 +35,18 @@ Context packet, engine tool calls, streaming thread per quote, proactive nudges,
 
 Branded PDF via @react-pdf/renderer, issue flow with immutable revisions, optional Zoho Estimates push, import of remaining past quotes.
 
-## Labour model update (incoming from Tarun)
+## Labour model (corrected 1 Sep 2026)
 
-The engine currently uses the interim model from spec section 8: labour per sqm = tier application rate x site labour multiplier (x1.08 when noise restricted). Rates back-solved from the 19 quotes at confidence M: thin coating 37.5, heavy application 75, surface preparation 15, demolition 80, roll membranes 27.
+Pricing never switches to crew-day mode. The calculated price is always material plus the tier application rate, plus site factors and margin. Rates back-solved from the 19 quotes at confidence M: thin coating 37.5, heavy application 75, surface preparation 15, demolition 80, roll membranes 27.
 
-Tarun will send crew sizes and all-in daily costs per tier. When that arrives:
+Crew-day maths is reference only: line breakdowns show "crew cost reference: X per sqm" and it feeds programme crew-day estimates, never a price. All the following are suggestions, source Tarun 1 Sep 2026, confidence L, editable in admin:
 
-1. Enter crew_size and crew_day_cost per tier (admin, Labour tiers screen, or tell Claude Code the numbers).
-2. Set default_productivity_sqm_per_crew_day per stage (Stages screen) where known.
-3. The engine switches automatically per line: when a tier has crew_day_cost and the stage a productivity, it prices labour as crew days x day cost x multiplier; otherwise it stays on the application rate. No code change needed; raise the rate_confidence to H once timesheets confirm.
+- Crew reference: crew of 5, 12,200 AED per month all in (wages 8,200 plus 800 per head for visa, insurance, accommodation), 26 working days, 470 per crew-day. Baseline productivity 25 sqm per crew-day, about 19 AED per sqm at weight 1.0.
+- Per-stage speed weights (programme estimates only): waterproofing 0.8, self-levelling 0.9, tiling 1.0, grinding 1.1, epoxy 1.2 per coat. Subsequent coats take 0.4 of first-coat time for epoxy, 1.0 for waterproofing.
+- Site factor upper floor or roof: calculated price of affected lines x1.15, editable up to 1.20 (settings).
+- Logistics suggestion from tonnage: under 1 ton a pickup (cost in settings, currently 0, set it); otherwise ceil(tonnage / 4) trucks at 2,000. Island profiles add a barge at 200 per ton (Al Maya Island 2026, 16,000 for 80 t); mainland trucks only.
+
+Raise confidences once timesheets confirm. Tests in tests/labour-reference.test.ts.
 
 ## Bring the dev server up
 

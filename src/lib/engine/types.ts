@@ -25,6 +25,15 @@ export interface EngineSettings {
   congestionLossPerExtraCrew: number;
   supervisorDayCost?: number;
   noiseLabourUplift?: number;
+  // Crew reference and programme estimates (suggestions, confidence L)
+  baselineProductivityPerCrewDay?: number;
+  // Upper floor or roof factor on calculated price, clamped to 1.20
+  upperFloorFactor?: number;
+  // Logistics suggestion rates
+  logisticsPickupCost?: number;
+  logisticsTruckCost?: number;
+  logisticsTruckCapacityTons?: number;
+  logisticsBargePerTon?: number;
 }
 
 export interface FamilyRef {
@@ -63,6 +72,7 @@ export interface SiteProfileRef {
   permitLump: number;
   parkingPerDay: number;
   noiseRestricted: boolean;
+  isIsland?: boolean;
 }
 
 export interface StageRef {
@@ -73,6 +83,11 @@ export interface StageRef {
   consumablePerSqm: number | null;
   productivity: number | null;
   productivityConfidence: Confidence | null;
+  // Speed weight scales baseline productivity for programme crew-day
+  // estimates only, never for pricing. Confidence L.
+  speedWeight?: number | null;
+  // Share of first-coat time each subsequent coat takes (0.4 epoxy, 1.0 WP)
+  subsequentCoatFactor?: number | null;
 }
 
 export interface LineInputs {
@@ -105,6 +120,8 @@ export interface LineInputs {
   productivityOverride?: number;
   // pricing
   marginOverride?: number;
+  // site factor: upper floor or roof multiplies calculated price
+  upperFloorOrRoof?: boolean;
   // extra material lines summed in (secondary families)
   secondaryFamilyIds?: string[];
 }
@@ -162,6 +179,8 @@ export interface LineBreakdown {
   labourPerUnit: number;
   consumablesPerUnit: number;
   equipmentPerUnit: number;
+  // Reference only, never applied to the price
+  crewCostReferencePerUnit: number | null;
   costPerUnit: number;
   floorPerUnit: number;
   calculatedPerUnit: number;

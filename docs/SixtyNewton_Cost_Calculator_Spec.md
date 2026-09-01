@@ -142,13 +142,15 @@ Adhesive consumption rule: base TDS value for the trowel; add back-butter allowa
 
 ### 4.2 Labour
 
-`crew_days = qty / productivity` (productivity in output units per crew-day, from stage default or line override).
+Correction (1 Sep 2026): pricing never switches to crew-day mode, even when crew costs exist.
 
-`labour = crew_days × tier.crew_day_cost × site_profile.labour_multiplier`.
+`labour_per_unit = tier.application_rate_per_sqm × site_profile.labour_multiplier` (× noise uplift when the site is noise restricted). Application rates are back-solved from the 19 analysed quotes (Section 8) at confidence M.
 
-`labour_per_unit = labour / qty`.
+Crew-day maths is a reference only, never applied to the price. When a tier has `crew_day_cost` and a productivity exists (stage default, line override, or `settings.baseline_productivity × stage.speed_weight`), the engine shows "crew cost reference: X per sqm" in the line breakdown, computed as `crew_day_cost / productivity`. It also feeds programme crew-day estimates (suggestion, confidence L): `crew_days = qty / (baseline_productivity × speed_weight)`, with subsequent coats taking `subsequent_coat_factor` of the first coat's time (0.4 epoxy, 1.0 waterproofing).
 
-Productivity defaults are seeded from the quote back-solve (Section 8) and marked confidence M until timesheets exist.
+The upper floor or roof site factor multiplies the calculated price of affected lines by `settings.upper_floor_factor` (default 1.15, editable up to 1.20). The cost floor is unchanged by it.
+
+A logistics lump line is suggested from total material tonnage: under 1 ton a pickup; otherwise `ceil(tonnage / truck_capacity)` trucks at the truck rate. Island site profiles add a barge at the per-ton rate (source: Al Maya Island 2026, 16,000 AED for 80 t); mainland sites get trucks only. Suggestion only, confidence L, editable before acceptance.
 
 ### 4.3 Consumables and equipment
 

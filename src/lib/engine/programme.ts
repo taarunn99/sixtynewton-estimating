@@ -1,5 +1,43 @@
 // Programme and compression. Spec section 4.4.
-import type { EngineSettings, ProgrammeResult, SiteProfileRef } from "./types";
+import type {
+  EngineSettings,
+  LineInput,
+  ProgrammeResult,
+  SiteProfileRef,
+  StageRef,
+} from "./types";
+
+// Programme crew-day estimate, suggestion only, confidence L. Uses the stage
+// productivity when set, otherwise the settings baseline scaled by the stage
+// speed weight. Coats: the first coat takes full time, each further coat takes
+// subsequent_coat_factor of it (0.4 epoxy, 1.0 waterproofing). Never used for
+// pricing; it seeds programme_base_crew_days as a suggestion.
+export function estimateCrewDays(
+  lines: LineInput[],
+  stagesById: Map<string, StageRef>,
+  settings: EngineSettings
+): { total: number; perLine: { lineId: string; crewDays: number }[] } {
+  const perLine: { lineId: string; crewDays: number }[] = [];
+  let total = 0;
+  for (const line of lines) {
+    if (!line.included || line.isRateOnly || line.unit !== "sqm") continue;
+    const stage = line.stageId ? stagesById.get(line.stageId) : null;
+    if (!stage) continue;
+    const baseline = settings.baselineProductivityPerCrewDay ?? null;
+    const prod =
+      line.inputs.productivityOverride ??
+      stage.productivity ??
+      (baseline ? baseline * (stage.speedWeight ?? 1) : null);
+    if (!prod) continue;
+    const coats = Math.max(1, line.inputs.coats ?? 1);
+    const coatFactor = stage.subsequentCoatFactor ?? 1;
+    const timeUnits = 1 + (coats - 1) * coatFactor;
+    const crewDays = (line.qty / prod) * timeUnits;
+    perLine.push({ lineId: line.id, crewDays });
+    total += crewDays;
+  }
+  return { total, perLine };
+}
 
 export function computeProgramme(args: {
   baseCrewDays: number | null;

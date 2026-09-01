@@ -13,7 +13,7 @@ export default async function StagesPage() {
   const [{ data: stages }, { data: families }, { data: tiers }] = await Promise.all([
     supabase
       .from("stages")
-      .select("id, sort_order, discipline, name, driver, unit_of_sale, default_family_id, labour_tier_id, default_productivity_sqm_per_crew_day, productivity_confidence, cure_days, notes")
+      .select("id, sort_order, discipline, name, driver, unit_of_sale, default_family_id, labour_tier_id, default_productivity_sqm_per_crew_day, productivity_confidence, cure_days, speed_weight, subsequent_coat_factor, notes")
       .order("sort_order"),
     supabase.from("product_families").select("id, name").order("name"),
     supabase.from("labour_tiers").select("id, name").order("name"),
@@ -39,6 +39,8 @@ export default async function StagesPage() {
               <th className="px-3 py-2 text-right font-normal">Productivity</th>
               <th className="px-3 py-2 font-normal">Conf</th>
               <th className="px-3 py-2 text-right font-normal">Cure days</th>
+              <th className="px-3 py-2 text-right font-normal">Speed weight</th>
+              <th className="px-3 py-2 text-right font-normal">Next coat factor</th>
             </tr>
           </thead>
           <tbody>
@@ -46,7 +48,7 @@ export default async function StagesPage() {
               const header =
                 s.discipline !== currentDiscipline ? (
                   <tr key={`${s.id}-h`} className="border-b border-neutral-200 bg-neutral-50">
-                    <td colSpan={7} className="px-3 py-1.5 font-serif text-sm">
+                    <td colSpan={9} className="px-3 py-1.5 font-serif text-sm">
                       {s.discipline}
                     </td>
                   </tr>
@@ -74,6 +76,12 @@ export default async function StagesPage() {
                     </td>
                     <td className="px-3 py-1.5 text-right">
                       <EditableCell table="stages" id={s.id} column="cure_days" value={s.cure_days} kind="number" width="w-14" />
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <EditableCell table="stages" id={s.id} column="speed_weight" value={s.speed_weight} kind="number" width="w-14" />
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <EditableCell table="stages" id={s.id} column="subsequent_coat_factor" value={s.subsequent_coat_factor} kind="number" width="w-14" />
                     </td>
                   </tr>
                 </>

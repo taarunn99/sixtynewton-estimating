@@ -39,6 +39,8 @@ export type LedgerLine = {
     consumables: number;
     equipment: number;
     cost: number;
+    // Reference only, never applied to the price
+    crewCostReference: number | null;
   };
   nudges: { rule: string; severity: string; message: string }[];
 };
@@ -106,7 +108,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
           "id, name, driver, pack_qty, pack_unit, coverage_value, coverage_unit, default_multiplier, waste_pct, coverage_confidence, manual_cost, manual_pack_qty, manual_pack_unit, representative_product_id, discipline"
         ),
       supabase.from("labour_tiers").select("id, name, crew_size, crew_day_cost, derived_application_rate_per_sqm, rate_confidence"),
-      supabase.from("stages").select("id, name, discipline, cure_days, consumable_per_sqm, default_productivity_sqm_per_crew_day, productivity_confidence"),
+      supabase.from("stages").select("id, name, discipline, cure_days, consumable_per_sqm, default_productivity_sqm_per_crew_day, productivity_confidence, speed_weight, subsequent_coat_factor"),
       quote.sites?.site_profile_id
         ? supabase.from("site_profiles").select("*").eq("id", quote.sites.site_profile_id).single()
         : Promise.resolve({ data: null }),
@@ -136,6 +138,12 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     workingHoursPerDay: Number(settingsRow!.working_hours_per_day),
     workingDaysPerWeek: Number(settingsRow!.working_days_per_week),
     congestionLossPerExtraCrew: Number(settingsRow!.congestion_loss_per_extra_crew),
+    baselineProductivityPerCrewDay: num(settingsRow!.baseline_productivity_sqm_per_crew_day) ?? undefined,
+    upperFloorFactor: num(settingsRow!.upper_floor_factor) ?? undefined,
+    logisticsPickupCost: num(settingsRow!.logistics_pickup_cost) ?? undefined,
+    logisticsTruckCost: num(settingsRow!.logistics_truck_cost) ?? undefined,
+    logisticsTruckCapacityTons: num(settingsRow!.logistics_truck_capacity_tons) ?? undefined,
+    logisticsBargePerTon: num(settingsRow!.logistics_barge_per_ton) ?? undefined,
   };
 
   const familiesById = new Map<string, FamilyRef>(
@@ -189,6 +197,8 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         consumablePerSqm: num(s.consumable_per_sqm),
         productivity: num(s.default_productivity_sqm_per_crew_day),
         productivityConfidence: s.productivity_confidence,
+        speedWeight: num(s.speed_weight),
+        subsequentCoatFactor: num(s.subsequent_coat_factor),
       },
     ])
   );
@@ -203,6 +213,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         permitLump: Number(profileRow.permit_lump),
         parkingPerDay: Number(profileRow.parking_per_day),
         noiseRestricted: profileRow.noise_restricted,
+        isIsland: profileRow.is_island ?? false,
       }
     : {
         allowedHoursPerDay: settings.workingHoursPerDay,
@@ -281,6 +292,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         consumables: b.consumablesPerUnit,
         equipment: b.equipmentPerUnit,
         cost: b.costPerUnit,
+        crewCostReference: b.crewCostReferencePerUnit,
       },
       nudges: b.nudges,
     };

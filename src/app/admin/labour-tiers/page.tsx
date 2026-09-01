@@ -19,8 +19,9 @@ export default async function LabourTiersPage() {
       <div className="mb-4">
         <h1 className="font-serif text-xl font-semibold">Labour tiers</h1>
         <p className="mt-1 max-w-2xl text-sm text-neutral-500">
-          Until crew sizes and daily costs are confirmed, the engine uses the application rate per
-          sqm back-solved from the 19 analysed quotes, at confidence M.
+          The price always comes from the application rate per sqm, back-solved from the 19
+          analysed quotes at confidence M. Crew size and crew day cost are reference figures
+          only: they appear in line breakdowns and programme estimates, never in a price.
         </p>
       </div>
       <div className="overflow-x-auto rounded-lg border border-neutral-300 bg-white">

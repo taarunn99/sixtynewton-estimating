@@ -9,7 +9,13 @@ import type {
   ReferenceData,
 } from "./types";
 import { totalMaterialPerUnit } from "./material";
-import { labourPerUnit, priceFromCost, roundRate } from "./pricing";
+import {
+  crewCostReferencePerUnit,
+  labourPerUnit,
+  priceFromCost,
+  roundRate,
+  upperFloorFactor,
+} from "./pricing";
 import { computeProgramme } from "./programme";
 
 function median(values: number[]): number {
@@ -45,8 +51,14 @@ export function computeLine(
     });
   }
 
-  const labour =
-    labourPerUnit(tier, line.inputs, stage?.productivity ?? null, quote.siteProfile, settings) ?? 0;
+  const labour = labourPerUnit(tier, line.inputs, quote.siteProfile, settings) ?? 0;
+  const crewReference = crewCostReferencePerUnit(
+    tier,
+    line.inputs,
+    stage?.productivity ?? null,
+    stage?.speedWeight ?? null,
+    settings
+  );
   const consumables = stage?.consumablePerSqm ?? 0;
   const equipment = 0;
 
@@ -54,7 +66,8 @@ export function computeLine(
   const overhead = quote.overheadPct ?? settings.defaultOverhead;
   const margin = line.inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
   const { floor, price } = priceFromCost(costPerUnit, overhead, margin);
-  const calculated = roundRate(price, isLump);
+  const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
+  const calculated = roundRate(sited, isLump);
   const floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
 
   const quoted = line.quotedRate ?? null;
@@ -120,6 +133,7 @@ export function computeLine(
     labourPerUnit: labour,
     consumablesPerUnit: consumables,
     equipmentPerUnit: equipment,
+    crewCostReferencePerUnit: crewReference,
     costPerUnit,
     floorPerUnit: floorRounded,
     calculatedPerUnit: calculated,
