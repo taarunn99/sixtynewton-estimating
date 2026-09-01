@@ -67,7 +67,14 @@ export function computeLine(
   const margin = line.inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
   const { floor, price } = priceFromCost(costPerUnit, overhead, margin);
   const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
-  const calculated = roundRate(sited, isLump);
+  const modelCalculated = roundRate(sited, isLump);
+  // Manual lump lines (scaffolding, garbage, demolition priced as a lump):
+  // when the engine has no usable cost basis the model price rounds to zero,
+  // so the quoted amount passes through as the suggested price instead of
+  // dragging the calculated total to nothing the engine never meant.
+  const quotedEarly = line.quotedRate ?? null;
+  const calculated =
+    isLump && quotedEarly !== null && modelCalculated === 0 ? quotedEarly : modelCalculated;
   const floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
 
   const quoted = line.quotedRate ?? null;
