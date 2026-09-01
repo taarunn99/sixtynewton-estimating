@@ -47,6 +47,18 @@ Pending in phase 2:
 - New quote flow at /quotes/new: client (existing or new), site, site profile, payment terms; takes the next QT number; starts as an empty R1 draft.
 - Not done: Zoho Estimates push (spec marks it optional), import of the remaining 24 past quote PDFs (tooling pattern exists in scripts/import-qt299.ts).
 
+## Calibration (1 Sep 2026, evening)
+
+Factors that stack on a line: material (waste, intercompany 1.09), labour tier rate x site labour multiplier (x noise 1.08 only when a profile sets it, off by default; upper floor factor off by default), consumables, overhead 12% to our cost, margin 25% to the suggested price, rounding per 4.6. Fixes: island multiplier 1.55 (was 2.0, single-comparison evidence), island profile noise off, demolition tier 75 (the 85.7 island observation was double counting with the multiplier), manual lumps pass through as suggested price. Live test in tests/calibration-live.test.ts: R1 all ticked prices to +12.8% of issued 286,125 with one line below our cost (the grout throw-in); R2 all ticked sums to 248,005.
+
+## Phase 6: language, clarity, application-only (1 Sep 2026)
+
+- Columns renamed everywhere: our cost, suggested price, your price, with (i) tooltips on headers and per-line derivation sentences on the numbers.
+- Typography: larger and heavier tabular figures, more row spacing, lighter labels. Rail header Clients and quotes, revisions nested with a caption.
+- Application-only mode: per-line Material by client toggle zeroes material, our cost becomes the crew cost reference, suggested price comes from the application-only rate table (admin screen, source Tarun Sep 2026, confidence H) times the site labour multiplier, description reads Application of, T&C gains the client-material clause. Tiling interpolates on tile area between 60x60 at 55 and large slabs at 120; other stages fall back to the tier rate. History for application-only pricing already seeded (Bugatti QT-000288, Foyer QT-000303).
+- Tile size (cm) is a line input on tiling stages, driving adhesive, grout and the application-only rate.
+- Assistant on claude-fable-5, consequence-first prompt, no asterisk emphasis, thread renders markdown.
+
 ## Phase 5: aesthetic design (first pass 1 Sep 2026)
 
 Brand palette from sixtynewton.com applied: dark warm rail (#1C1713) with gold accents (#C2A05C), cream page ground, gold Issue button, dark totals band with light figures, tinted three-price column headers, row hover, readable darker gold for quoted text. Colour meaning rules unchanged. Further polish welcome after Tarun reviews.
