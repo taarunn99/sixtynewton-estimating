@@ -1,0 +1,58 @@
+# Project status
+
+Updated 1 Sep 2026. App: Sixty Newton estimating workbench. Repo: https://github.com/taarunn99/sixtynewton-estimating
+
+## Phase 1: foundation (done)
+
+- Next.js 15 scaffold, TypeScript strict, Tailwind 4, shadcn/ui, vitest, ESLint. A prebuild test fails the build if any em or en dash appears in src, scripts or supabase.
+- Supabase schema live on project okfemqdtvpuzngwscpvt (ap-southeast-1): all spec section 3 tables, RLS (authenticated read, admin write on reference data, estimators write their own quotes), products_with_sn_cost view, quote_line_history materialised view. Migrations in supabase/migrations, applied with `npm run db:push`.
+- Auth: email and password, profiles with admin and estimator roles, middleware blocks everything except /login. Users: Tarun (admin), Ashrat (estimator).
+- Seed (`npm run seed`, idempotent): 93 stages, 217 product families, 50 observed rates, 7 labour tiers, 5 site profiles, 9 lump items from the workbook.
+- Zoho Books sync: nightly cron route (02:00 Dubai) plus `npm run sync` for manual runs. First sync done: 6,515 items, pack parsing, zero-cost and duplicate flags (caught the Purtop 500 N 525 vs 5,670 pair), family linking, review queue.
+- Admin screens: products, review queue, families with inline coverage editing, stages, labour tiers, site profiles, settings.
+
+## Phase 2: engine and ledger (done, pending visual review)
+
+- Pure engine in src/lib/engine: material by all 8 drivers, Mapei grout formula, back-butter rule, sealant joint geometry, labour with site multiplier and noise uplift, programme compression per spec 4.4, overhead, margin, cost floor, rounding per 4.6, VAT exclusive, rate-only lines, nudge rules.
+- 105 tests pass, including reproduction of the analysed quotes (docs/quotes, 25 PDFs) within the spec section 8 tier bands, and floor blocks on the four known below-cost lines.
+- Review queue cleanup: 238 auto-linked (Kerakoll, Weber, Fosroc, Laticrete, Awazel), 1,126 tools-brand items resolved not applicable, 4,500 remain.
+- NOT IN BOOKS families folded to manual cost; four Kerakoll decorative lines priced from the Bugatti quote; 13 families await manual purchase prices (marked in admin).
+- QT-000299 imported: R1 matches the issued PDF (286,125), R2 is the working draft.
+- Workbench at /quotes/[id]: three-price ledger (floor, calculated, quoted), include and exclude ticks, expandable breakdowns, discipline-filtered stage picker and product swap, variables panel, programme row with crew arithmetic, before and after table, pocket calculator with x1.09 and use-as-quoted.
+
+Pending in phase 2:
+
+- Visual review of the ledger on QT-000299 (blocked only by the local machine hanging Node processes; a restart should clear it).
+- New quote creation flow and the issue and revision flow.
+- Equipment costs (table exists, no data yet).
+- Manual purchase prices for the 13 unstocked families.
+
+## Phase 3: assistant (not started)
+
+Context packet, engine tool calls, streaming thread per quote, proactive nudges, client note drafting. The right column already reserves the space.
+
+## Phase 4: output (not started)
+
+Branded PDF via @react-pdf/renderer, issue flow with immutable revisions, optional Zoho Estimates push, import of remaining past quotes.
+
+## Labour model update (incoming from Tarun)
+
+The engine currently uses the interim model from spec section 8: labour per sqm = tier application rate x site labour multiplier (x1.08 when noise restricted). Rates back-solved from the 19 quotes at confidence M: thin coating 37.5, heavy application 75, surface preparation 15, demolition 80, roll membranes 27.
+
+Tarun will send crew sizes and all-in daily costs per tier. When that arrives:
+
+1. Enter crew_size and crew_day_cost per tier (admin, Labour tiers screen, or tell Claude Code the numbers).
+2. Set default_productivity_sqm_per_crew_day per stage (Stages screen) where known.
+3. The engine switches automatically per line: when a tier has crew_day_cost and the stage a productivity, it prices labour as crew days x day cost x multiplier; otherwise it stays on the application rate. No code change needed; raise the rate_confidence to H once timesheets confirm.
+
+## Bring the dev server up
+
+```
+cd ~/Desktop/sixtynewton-estimating
+npm install          # only after a fresh clone
+npm run dev          # starts on port 3000; use PORT=3001 npm run dev if Lapiz Blue is on 3000
+```
+
+Then open http://localhost:3001 (or 3000), sign in, and the latest quote loads. Useful scripts: `npm run test`, `npm run typecheck`, `npm run db:push`, `npm run seed`, `npm run sync` (Zoho, needs .env.local), `npm run fixtures` (refresh engine test fixtures after price changes).
+
+.env.local holds all keys and is not committed. The Supabase database connects via the ap-southeast-1 pooler (scripts/db-push.ts handles this automatically).

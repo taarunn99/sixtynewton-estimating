@@ -12,7 +12,9 @@
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
     "db:push": "tsx scripts/db-push.ts",
-    "set-password": "tsx scripts/set-password.ts"
+    "set-password": "tsx scripts/set-password.ts",
+    "sync": "tsx scripts/first-sync.ts",
+    "fixtures": "tsx scripts/make-fixtures.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
