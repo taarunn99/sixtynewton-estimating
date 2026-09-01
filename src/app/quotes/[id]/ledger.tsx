@@ -119,7 +119,7 @@ function AddStageDialog({
           <button
             key={s.id}
             onClick={() => pick(s)}
-            className="grid w-full grid-cols-[1fr_auto_auto] items-baseline gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-[#F6F0DF]"
+            className="grid w-full grid-cols-[1fr_auto_auto] items-baseline gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-[#F7F2E6]"
           >
             <span className="truncate">{s.name}</span>
             {!discipline ? <span className="text-xs text-[#8A929C]">{s.discipline}</span> : <span />}
@@ -182,8 +182,8 @@ function LineRow({
   return (
     <>
       <div
-        className={`grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] items-center gap-2 border-b border-[#E2E5E9] py-1.5 ${
-          included ? "" : "text-[#8A929C]"
+        className={`grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] items-center gap-2 border-b border-[#EEEAE0] py-2 transition-colors hover:bg-[#FAF7EF] ${
+          included ? "" : "text-[#8A929C] opacity-70"
         }`}
       >
         <button
@@ -216,7 +216,7 @@ function LineRow({
         </span>
         <span className={`text-right text-sm font-medium tabular-nums ${pending ? "opacity-40" : ""}`}>{fmt(displayCalc)}</span>
         <input
-          className="w-[88px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm font-medium tabular-nums text-[#B8953F] hover:border-[#B8953F] focus:border-[#B8953F] focus:bg-[#F6F0DF] focus:outline-none"
+          className="w-[88px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm font-medium tabular-nums text-[#96772B] hover:border-[#C2A05C] focus:border-[#C2A05C] focus:bg-[#F6F0DF] focus:outline-none"
           value={quoted}
           disabled={!editable}
           onFocus={() => {
@@ -263,7 +263,7 @@ function LineRow({
               <div className="flex items-center gap-3">
                 <label className="text-[#8A929C]">Product</label>
                 <select
-                  className="max-w-96 rounded border border-[#CFD4DA] bg-white px-2 py-1 text-xs focus:border-[#B8953F] focus:outline-none"
+                  className="max-w-96 rounded border border-[#CFD4DA] bg-white px-2 py-1 text-xs focus:border-[#C2A05C] focus:outline-none"
                   value={line.familyId ?? ""}
                   onChange={(e) => save({ familyId: e.target.value || null })}
                 >
@@ -302,7 +302,7 @@ function VarInput({ label, value, suffix, onSave, editable }: { label: string; v
       <label className="text-[13px] text-[#5B636E]">{label}</label>
       <input
         type="number"
-        className="w-14 border-b border-[#CFD4DA] bg-transparent px-0.5 text-right text-sm tabular-nums focus:border-[#B8953F] focus:outline-none"
+        className="w-14 border-b border-[#CFD4DA] bg-transparent px-0.5 text-right text-sm tabular-nums focus:border-[#C2A05C] focus:outline-none"
         value={v}
         disabled={!editable}
         onChange={(e) => setV(e.target.value)}
@@ -367,7 +367,7 @@ function HeaderActions({
           <button
             onClick={() => issue()}
             disabled={pending}
-            className="rounded-lg bg-[#1F2328] px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+            className="rounded-lg bg-[#C2A05C] px-3 py-2 text-sm font-medium text-[#1C1713] hover:bg-[#D0B172] disabled:opacity-50"
           >
             {pending ? "Working" : `Issue R${quote.revision}`}
           </button>
@@ -465,7 +465,7 @@ export function Ledger({
     : 0;
 
   return (
-    <div className="mx-auto max-w-[980px] rounded-xl border border-[#CFD4DA] bg-white">
+    <div className="mx-auto max-w-[980px] rounded-xl border border-[#DDD6C7] bg-white shadow-[0_1px_3px_rgba(28,23,19,0.06)]">
       <div className="flex items-start justify-between gap-5 px-7 pt-5">
         <div>
           <h1 className="font-serif text-[22px] font-semibold">
@@ -475,7 +475,7 @@ export function Ledger({
             Bill to {quote.clientName} &middot; Site {quote.siteName} &middot; {quote.quoteDate}, valid {quote.validDays} days
           </div>
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <span className="rounded-full border border-[#B8953F] bg-[#F6F0DF] px-2.5 py-0.5 text-xs text-[#B8953F]">
+            <span className="rounded-full border border-[#C2A05C] bg-[#F6F0DF] px-2.5 py-0.5 text-xs text-[#96772B]">
               Site profile: {quote.siteProfileName}
             </span>
             <span className="rounded-full border border-[#CFD4DA] px-2.5 py-0.5 text-xs text-[#5B636E]">
@@ -495,14 +495,14 @@ export function Ledger({
         <HeaderActions quote={quote} editable={editable} />
       </div>
 
-      <div className="sticky top-0 z-10 mt-3.5 grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] gap-2 border-y border-[#E2E5E9] bg-white px-7 py-1.5 text-xs text-[#8A929C]">
+      <div className="sticky top-0 z-10 mt-3.5 grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] gap-2 border-y border-[#E2DDD0] bg-[#FAF7EF] px-7 py-2 text-xs font-medium">
         <span />
-        <span>Stage and product</span>
-        <span className="text-right">Qty</span>
+        <span className="text-[#5B636E]">Stage and product</span>
+        <span className="text-right text-[#5B636E]">Qty</span>
         <span />
-        <span className="text-right text-[#4A6B8A]">Cost floor</span>
-        <span className="text-right">Calculated</span>
-        <span className="text-right text-[#B8953F]">Quoted</span>
+        <span className="rounded-l bg-[#EEF3F7] px-1 py-0.5 text-right text-[#3E5C77]">Cost floor</span>
+        <span className="bg-[#F1EFEA] px-1 py-0.5 text-right text-[#1F2328]">Calculated</span>
+        <span className="rounded-r bg-[#F6F0DF] px-1 py-0.5 text-right text-[#96772B]">Quoted</span>
         <span />
       </div>
 
@@ -557,43 +557,43 @@ export function Ledger({
         </div>
       </div>
 
-      <div className="mx-7 mt-4 border-t-2 border-[#1F2328] pt-2.5 pb-6">
+      <div className="mx-7 mt-5 mb-6 rounded-xl bg-[#1C1713] px-5 pb-4 pt-2.5 text-[#EDE6D6]">
         <div className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
-          <span className="text-sm text-[#5B636E]">Included stages, base programme</span>
-          <span className="text-right text-sm font-medium tabular-nums text-[#4A6B8A]">{fmt(totals.floorSubtotal)}</span>
-          <span className="text-right text-sm font-medium tabular-nums">{fmt(totals.calculatedSubtotal)}</span>
-          <span className="text-right text-sm font-medium tabular-nums text-[#B8953F]">{fmt(totals.quotedSubtotal)}</span>
+          <span className="text-sm text-[#B9AE99]">Included stages, base programme</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#8FB2D1]">{fmt(totals.floorSubtotal)}</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#F4EEDE]">{fmt(totals.calculatedSubtotal)}</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#D8B96A]">{fmt(totals.quotedSubtotal)}</span>
           <span />
         </div>
         {totals.programmeUplift > 0 || totals.programmeInfeasible ? (
           <>
             <div className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
-              <span className="text-sm text-[#5B636E]">Programme compression</span>
-              <span className="text-right text-sm font-medium tabular-nums text-[#4A6B8A]">{fmt(totals.programmeUplift)}</span>
-              <span className="text-right text-sm font-medium tabular-nums">{fmt(totals.programmeUplift)}</span>
-              <span className="text-right text-sm tabular-nums text-[#8A929C]">in rates</span>
+              <span className="text-sm text-[#B9AE99]">Programme compression</span>
+              <span className="text-right text-sm font-medium tabular-nums text-[#8FB2D1]">{fmt(totals.programmeUplift)}</span>
+              <span className="text-right text-sm font-medium tabular-nums text-[#F4EEDE]">{fmt(totals.programmeUplift)}</span>
+              <span className="text-right text-sm tabular-nums text-[#9A8E77]">in rates</span>
               <span />
             </div>
-            <p className={`py-0.5 text-xs ${totals.programmeInfeasible ? "text-[#A83232]" : "text-[#8A929C]"}`}>
+            <p className={`py-0.5 text-xs ${totals.programmeInfeasible ? "text-[#E58A8A]" : "text-[#9A8E77]"}`}>
               {totals.programmeExplanation}
             </p>
           </>
         ) : null}
         <div className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
-          <span className="text-sm text-[#5B636E]">VAT 5%</span>
-          <span className="text-right text-sm font-medium tabular-nums text-[#4A6B8A]">{fmt(totals.vatFloor)}</span>
-          <span className="text-right text-sm font-medium tabular-nums">{fmt(totals.vatCalculated)}</span>
-          <span className="text-right text-sm font-medium tabular-nums text-[#B8953F]">{fmt(totals.vatQuoted)}</span>
+          <span className="text-sm text-[#B9AE99]">VAT 5%</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#8FB2D1]">{fmt(totals.vatFloor)}</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#F4EEDE]">{fmt(totals.vatCalculated)}</span>
+          <span className="text-right text-sm font-medium tabular-nums text-[#D8B96A]">{fmt(totals.vatQuoted)}</span>
           <span />
         </div>
-        <div className="mt-1 grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 border-t border-[#E2E5E9] py-2 text-[15px]">
-          <span className="font-semibold">Total AED</span>
-          <span className="text-right font-medium tabular-nums text-[#4A6B8A]">{fmt(totals.totalFloor)}</span>
-          <span className="text-right font-medium tabular-nums">{fmt(totals.totalCalculated)}</span>
-          <span className="text-right font-medium tabular-nums text-[#B8953F]">{fmt(totals.totalQuoted)}</span>
+        <div className="mt-1 grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 border-t border-[#3A3128] py-2 text-[15px]">
+          <span className="font-semibold text-[#F4EEDE]">Total AED</span>
+          <span className="text-right font-medium tabular-nums text-[#8FB2D1]">{fmt(totals.totalFloor)}</span>
+          <span className="text-right font-semibold tabular-nums text-[#F4EEDE]">{fmt(totals.totalCalculated)}</span>
+          <span className="text-right font-semibold tabular-nums text-[#D8B96A]">{fmt(totals.totalQuoted)}</span>
           <span />
         </div>
-        <p className="pt-1 text-xs text-[#8A929C]">
+        <p className="pt-1 text-xs text-[#9A8E77]">
           Quoted sits {deltaPct >= 0 ? "+" : ""}
           {deltaPct.toFixed(1)}% against calculated and {overFloorPct >= 0 ? "+" : ""}
           {overFloorPct.toFixed(1)}% over the cost floor.
@@ -605,13 +605,13 @@ export function Ledger({
         <div className="grid grid-cols-[110px_1fr_92px] gap-2 border-b border-[#E2E5E9] py-1.5 text-xs text-[#8A929C]">
           <span>Version</span>
           <span>Status</span>
-          <span className="text-right text-[#B8953F]">Quoted</span>
+          <span className="text-right text-[#96772B]">Quoted</span>
         </div>
         {data.revisions.map((r) => (
           <div key={r.revision} className="grid grid-cols-[110px_1fr_92px] gap-2 border-b border-[#E2E5E9] py-1.5 text-sm text-[#5B636E] last:border-b-0">
             <span>R{r.revision}</span>
             <span>{r.changed}</span>
-            <span className="text-right font-medium tabular-nums text-[#B8953F]">
+            <span className="text-right font-medium tabular-nums text-[#96772B]">
               {r.revision === quote.revision ? fmt(totals.totalQuoted) : r.quotedTotal === null ? "." : fmt(r.quotedTotal)}
             </span>
           </div>

@@ -277,6 +277,7 @@ Branded PDF matching the current Sixty Newton layout (logo, TRN 104670113000003,
 2. **Engine** (week 2): engine module with tests against the 19 imported quotes (target: reproduce each quoted rate within the documented tier ranges); quote builder UI with live breakdown; nudges as chips.
 3. **Assistant** (week 3): context packet, tools, streaming UI, proactive nudges, client-note drafting.
 4. **Output** (week 4): PDF, revisions, issue flow, optional Zoho Estimate push, history import of remaining past quotes.
+5. **Aesthetic design**: align the workbench with the sixtynewton.com brand (warm near-black, cream, gold), improve contrast and data grouping so the ledger reads calmly at first sight. Colour meaning rules from 12.4 still hold.
 
 ## 11. Open items
 

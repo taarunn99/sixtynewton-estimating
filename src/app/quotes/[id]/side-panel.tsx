@@ -214,12 +214,12 @@ function AssistantThread({
 
         {messages.map((m) =>
           m.role === "note" ? (
-            <div key={m.id} className="mb-2.5 rounded-lg border border-[#B8953F] bg-[#F6F0DF] p-2.5 text-xs">
+            <div key={m.id} className="mb-2.5 rounded-lg border border-[#C2A05C] bg-[#F6F0DF] p-2.5 text-xs">
               <div className="mb-1 flex items-center justify-between">
                 <span className="font-medium text-[#B8741A]">{m.purpose ?? "Drafted note"}</span>
                 <button
                   onClick={() => navigator.clipboard.writeText(m.content)}
-                  className="rounded border border-[#B8953F] px-1.5 py-0.5 text-[10px] text-[#B8741A]"
+                  className="rounded border border-[#C2A05C] px-1.5 py-0.5 text-[10px] text-[#B8741A]"
                 >
                   Copy
                 </button>
@@ -382,7 +382,7 @@ export function SidePanel({
           ))}
           <button
             onClick={useAsQuoted}
-            className="col-span-2 rounded-md border border-[#B8953F] bg-[#F6F0DF] py-1.5 text-[13px] text-[#B8953F]"
+            className="col-span-2 rounded-md border border-[#C2A05C] bg-[#F6F0DF] py-1.5 text-[13px] text-[#96772B]"
           >
             Use as quoted rate
           </button>

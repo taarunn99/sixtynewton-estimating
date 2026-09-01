@@ -35,9 +35,17 @@ Pending in phase 2:
 - Thread UI in the workbench right column: opening nudge summary by severity (composed from the engine, no tokens spent), streaming replies, tool chips, drafted notes as copyable cards, compose box with model name and budget percentage.
 - Not yet done: per-nudge action buttons (Set to calculated, Keep and add reason), history comparison tables inside nudges, proactive what-if phrasing checks. Live round-trip untested locally because Node servers hang on this machine; test on the deployed URL.
 
-## Phase 4: output (not started)
+## Phase 4: output (built 1 Sep 2026)
 
-Branded PDF via @react-pdf/renderer, issue flow with immutable revisions, optional Zoho Estimates push, import of remaining past quotes.
+- Branded PDF at /quotes/[id]/pdf via @react-pdf/renderer: TRN, address, spec 9 columns, quoted rates (calculated fills gaps), rate-only lines as TBC, notes and fixed terms. Preview PDF button opens it.
+- Issue flow: drafts become issued and immutable, totals snapshotted. Lines below the cost floor block the issue; an admin can issue with a written reason (stored in the snapshot).
+- Revisions: New revision R+1 copies the quote and lines to a fresh draft; issued sources become revised. Never overwritten.
+- New quote flow at /quotes/new: client (existing or new), site, site profile, payment terms; takes the next QT number; starts as an empty R1 draft.
+- Not done: Zoho Estimates push (spec marks it optional), import of the remaining 24 past quote PDFs (tooling pattern exists in scripts/import-qt299.ts).
+
+## Phase 5: aesthetic design (first pass 1 Sep 2026)
+
+Brand palette from sixtynewton.com applied: dark warm rail (#1C1713) with gold accents (#C2A05C), cream page ground, gold Issue button, dark totals band with light figures, tinted three-price column headers, row hover, readable darker gold for quoted text. Colour meaning rules unchanged. Further polish welcome after Tarun reviews.
 
 ## Labour model (corrected 1 Sep 2026)
 

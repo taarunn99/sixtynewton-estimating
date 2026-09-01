@@ -42,26 +42,26 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   };
 
   return (
-    <div className="grid h-screen min-w-[1180px] grid-cols-[260px_1fr_380px] bg-[#F1F2F4]">
-      <aside className="flex flex-col overflow-hidden border-r border-[#CFD4DA]">
+    <div className="grid h-screen min-w-[1180px] grid-cols-[260px_1fr_380px] bg-[#F4F1EA]">
+      <aside className="flex flex-col overflow-hidden bg-[#1C1713] text-[#EDE6D6]">
         <div className="flex items-center gap-2 px-4 pb-3 pt-4">
           <div>
-            <div className="font-serif text-base font-semibold">SixtyNewton</div>
-            <div className="text-[11px] tracking-wide text-[#8A929C]">Estimating</div>
+            <div className="font-serif text-base font-semibold text-[#F4EEDE]">SixtyNewton</div>
+            <div className="text-[11px] tracking-wide text-[#C2A05C]">Estimating</div>
           </div>
         </div>
         <Link
           href="/quotes/new"
-          className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-[#CFD4DA] bg-white px-3 py-2 text-left text-sm hover:border-[#B8953F]"
+          className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-[#C2A05C] bg-[#C2A05C] px-3 py-2 text-left text-sm font-medium text-[#1C1713] hover:bg-[#D0B172]"
         >
-          New quote <kbd className="rounded border border-[#CFD4DA] px-1 text-[11px] text-[#8A929C]">N</kbd>
+          New quote <kbd className="rounded border border-[#1C1713]/30 px-1 text-[11px]">N</kbd>
         </Link>
         <div className="flex-1 overflow-auto px-2 pb-4">
           {[...byClient.entries()].map(([client, quotes]) => (
             <div key={client} className="mt-2">
-              <div className="flex justify-between px-2 py-1 text-sm">
+              <div className="flex justify-between px-2 py-1 text-sm text-[#EDE6D6]">
                 <span>{client}</span>
-                <span className="text-xs text-[#8A929C]">{quotes.length}</span>
+                <span className="text-xs text-[#9A8E77]">{quotes.length}</span>
               </div>
               <ul className="pl-2">
                 {quotes.map((q) => (
@@ -70,14 +70,22 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                       href={`/quotes/${q.id}`}
                       className={`grid grid-cols-[1fr_auto] gap-2 rounded-md px-2.5 py-1.5 text-sm ${
                         q.id === ledger.quote.id
-                          ? "bg-white text-[#1F2328] shadow-[inset_3px_0_0_#B8953F]"
-                          : "text-[#5B636E] hover:bg-[#E8EAEE]"
+                          ? "bg-[#2B231B] text-[#F4EEDE] shadow-[inset_3px_0_0_#C2A05C]"
+                          : "text-[#B9AE99] hover:bg-[#2B231B] hover:text-[#EDE6D6]"
                       }`}
                     >
                       <span className="truncate">
                         {q.number} R{q.revision}
                       </span>
-                      <span className="self-center rounded-full bg-[#E4E7EB] px-1.5 text-[11px] text-[#5B636E]">
+                      <span
+                        className={`self-center rounded-full px-1.5 text-[11px] ${
+                          q.status === "won"
+                            ? "bg-[#2E4633] text-[#9FCE8F]"
+                            : q.status === "draft"
+                              ? "bg-[#3A3128] text-[#C2A05C]"
+                              : "bg-[#2B231B] text-[#9A8E77]"
+                        }`}
+                      >
                         {STATUS_LABEL[q.status] ?? q.status}
                       </span>
                     </Link>
@@ -87,9 +95,9 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             </div>
           ))}
         </div>
-        <div className="flex justify-between border-t border-[#CFD4DA] px-4 py-2.5 text-xs text-[#8A929C]">
+        <div className="flex justify-between border-t border-[#3A3128] px-4 py-2.5 text-xs text-[#9A8E77]">
           <span>{profile.full_name ?? "Signed in"}</span>
-          <Link href="/admin/products" className="hover:text-[#1F2328]">
+          <Link href="/admin/products" className="hover:text-[#EDE6D6]">
             Admin
           </Link>
         </div>
