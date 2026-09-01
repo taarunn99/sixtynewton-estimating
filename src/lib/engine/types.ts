@@ -88,6 +88,12 @@ export interface StageRef {
   speedWeight?: number | null;
   // Share of first-coat time each subsequent coat takes (0.4 epoxy, 1.0 WP)
   subsequentCoatFactor?: number | null;
+  // Application-only list price (material by client). Either a fixed rate or
+  // tiling anchors interpolated linearly on tile area. Source Tarun Sep 2026.
+  applicationOnly?: {
+    rate?: number | null;
+    tiling?: { smallArea: number; smallRate: number; largeArea: number; largeRate: number };
+  } | null;
 }
 
 export interface LineInputs {
@@ -122,6 +128,8 @@ export interface LineInputs {
   marginOverride?: number;
   // site factor: upper floor or roof multiplies calculated price
   upperFloorOrRoof?: boolean;
+  // application-only mode: client supplies material
+  materialByClient?: boolean;
   // extra material lines summed in (secondary families)
   secondaryFamilyIds?: string[];
 }

@@ -128,3 +128,34 @@
     @apply font-sans;
   }
 }
+/* Assistant thread markdown */
+.sn-md > * + * {
+  margin-top: 0.4rem;
+}
+.sn-md ul,
+.sn-md ol {
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+.sn-md ol {
+  list-style: decimal;
+}
+.sn-md table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.sn-md th,
+.sn-md td {
+  border: 1px solid #cfd4da;
+  padding: 2px 6px;
+  text-align: left;
+}
+.sn-md th {
+  background: #faf7ef;
+  font-weight: 500;
+}
+.sn-md code {
+  background: #e8e4d8;
+  border-radius: 3px;
+  padding: 0 3px;
+}

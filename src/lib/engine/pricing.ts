@@ -44,6 +44,32 @@ export function upperFloorFactor(settings: EngineSettings): number {
   return Math.min(Math.max(f, 1), 1.2);
 }
 
+// Application-only list rate (material by client), before the site labour
+// multiplier. Tiling interpolates linearly on tile area between the anchors
+// (60x60 at the small rate up to large slabs at the large rate), clamped to
+// the anchor rates. Falls back to null when the stage has no list price; the
+// caller then uses the labour tier application rate.
+export function applicationOnlyListRate(
+  stage: { applicationOnly?: StageApplicationOnly | null } | null,
+  inputs: LineInputs
+): number | null {
+  const ao = stage?.applicationOnly;
+  if (!ao) return null;
+  if (ao.tiling && inputs.tileLengthMm && inputs.tileWidthMm) {
+    const { smallArea, smallRate, largeArea, largeRate } = ao.tiling;
+    const area = (inputs.tileLengthMm / 1000) * (inputs.tileWidthMm / 1000);
+    if (area <= smallArea) return smallRate;
+    if (area >= largeArea) return largeRate;
+    return smallRate + ((area - smallArea) / (largeArea - smallArea)) * (largeRate - smallRate);
+  }
+  if (ao.tiling) return null; // tiling stage without a tile size: fall back
+  return ao.rate ?? null;
+}
+
+type StageApplicationOnly = NonNullable<
+  import("./types").StageRef["applicationOnly"]
+>;
+
 // Rounding per spec 4.6: unit rates to nearest 1 AED at 50 and above,
 // nearest 0.5 below; lump sums to nearest 500.
 export function roundRate(value: number, isLump: boolean): number {

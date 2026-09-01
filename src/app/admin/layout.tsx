@@ -9,6 +9,7 @@ const NAV = [
   { href: "/admin/families", label: "Product families" },
   { href: "/admin/stages", label: "Stages" },
   { href: "/admin/labour-tiers", label: "Labour tiers" },
+  { href: "/admin/application-rates", label: "Application-only rates" },
   { href: "/admin/site-profiles", label: "Site profiles" },
   { href: "/admin/settings", label: "Settings" },
 ];

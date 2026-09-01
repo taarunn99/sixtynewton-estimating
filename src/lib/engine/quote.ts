@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { totalMaterialPerUnit } from "./material";
 import {
+  applicationOnlyListRate,
   crewCostReferencePerUnit,
   labourPerUnit,
   priceFromCost,
@@ -40,8 +41,11 @@ export function computeLine(
 
   const nudges: Nudge[] = [];
   const isLump = line.unit === "lump";
+  const applicationOnly = !!line.inputs.materialByClient;
 
-  const material = totalMaterialPerUnit(family, secondaries, line.inputs, settings);
+  const material = applicationOnly
+    ? { value: 0, missing: [] as string[] }
+    : totalMaterialPerUnit(family, secondaries, line.inputs, settings);
   for (const name of material.missing) {
     nudges.push({
       rule: "missing_cost",
@@ -62,20 +66,41 @@ export function computeLine(
   const consumables = stage?.consumablePerSqm ?? 0;
   const equipment = 0;
 
-  const costPerUnit = material.value + labour + consumables + equipment;
   const overhead = quote.overheadPct ?? settings.defaultOverhead;
   const margin = line.inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
-  const { floor, price } = priceFromCost(costPerUnit, overhead, margin);
-  const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
-  const modelCalculated = roundRate(sited, isLump);
-  // Manual lump lines (scaffolding, garbage, demolition priced as a lump):
-  // when the engine has no usable cost basis the model price rounds to zero,
-  // so the quoted amount passes through as the suggested price instead of
-  // dragging the calculated total to nothing the engine never meant.
   const quotedEarly = line.quotedRate ?? null;
-  const calculated =
-    isLump && quotedEarly !== null && modelCalculated === 0 ? quotedEarly : modelCalculated;
-  const floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
+
+  let costPerUnit: number;
+  let floorRounded: number;
+  let calculated: number;
+  if (applicationOnly) {
+    // Application-only mode: client supplies material. Our cost is the crew
+    // cost reference alone; the suggested price is the application-only list
+    // rate (or the tier application rate when no list price exists) times the
+    // site labour multiplier. List prices already carry margin.
+    costPerUnit = crewReference ?? labour;
+    floorRounded = isLump ? Math.round(costPerUnit) : Math.round(costPerUnit * 2) / 2;
+    const listRate =
+      applicationOnlyListRate(stage, line.inputs) ??
+      line.inputs.applicationRateOverride ??
+      tier?.applicationRatePerSqm ??
+      0;
+    const priced = listRate * quote.siteProfile.labourMultiplier;
+    const sited = line.inputs.upperFloorOrRoof ? priced * upperFloorFactor(settings) : priced;
+    calculated = roundRate(sited, isLump);
+  } else {
+    costPerUnit = material.value + labour + consumables + equipment;
+    const { floor, price } = priceFromCost(costPerUnit, overhead, margin);
+    const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
+    const modelCalculated = roundRate(sited, isLump);
+    // Manual lump lines (scaffolding, garbage, demolition priced as a lump):
+    // when the engine has no usable cost basis the model price rounds to zero,
+    // so the quoted amount passes through as the suggested price instead of
+    // dragging the calculated total to nothing the engine never meant.
+    calculated =
+      isLump && quotedEarly !== null && modelCalculated === 0 ? quotedEarly : modelCalculated;
+    floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
+  }
 
   const quoted = line.quotedRate ?? null;
   const qtyForTotals = line.isRateOnly ? 0 : line.qty;
@@ -85,14 +110,14 @@ export function computeLine(
     nudges.push({
       rule: "below_cost_floor",
       severity: "block",
-      message: `Quoted ${quoted} is below the cost floor of ${floorRounded}. This line loses money.`,
+      message: `Your price ${quoted} is below our cost of ${floorRounded}. This line loses money.`,
       lineId: line.id,
     });
   } else if (quoted !== null && quoted < calculated) {
     nudges.push({
       rule: "below_calculated",
       severity: "warn",
-      message: `Quoted ${quoted} sits below the calculated ${calculated}.`,
+      message: `Your price ${quoted} sits below the suggested ${calculated}.`,
       lineId: line.id,
     });
   }
@@ -128,7 +153,7 @@ export function computeLine(
       nudges.push({
         rule: "history_deviation",
         severity: "warn",
-        message: `Quoted ${quoted} deviates more than 15% from the median of ${med} for this stage (${last}).`,
+        message: `Your price ${quoted} deviates more than 15% from the median of ${med} for this stage (${last}).`,
         lineId: line.id,
       });
     }

@@ -82,7 +82,13 @@ export function QuotePdf({ ledger, companyAddress }: { ledger: LedgerResult; com
             <View key={l.id} style={styles.tr} wrap={false}>
               <Text style={styles.cNum}>{i + 1}</Text>
               <View style={styles.cDesc}>
-                <Text>{l.description}</Text>
+                <Text>
+                  {l.materialByClient
+                    ? l.description
+                        .replace(/^Supply and application of\s+/i, "Application of ")
+                        .replace(/^(?!Application of )(.)/, (m) => `Application of ${m.toLowerCase()}`)
+                    : l.description}
+                </Text>
                 {l.detail ? <Text style={styles.detail}>{l.detail}</Text> : null}
               </View>
               <Text style={styles.cQty}>{l.isRateOnly ? "TBC" : fmt(l.qty)}</Text>
@@ -126,6 +132,11 @@ export function QuotePdf({ ledger, companyAddress }: { ledger: LedgerResult; com
         <Text style={styles.note}>
           4. Materials remain the property of Sixty Newton Technical Services until paid for in full.
         </Text>
+        {included.some((l) => l.materialByClient) ? (
+          <Text style={styles.note}>
+            5. Materials supplied by client to manufacturer specification.
+          </Text>
+        ) : null}
 
         <Text style={styles.footer} fixed>
           Sixty Newton Technical Services, {companyAddress}, TRN {TRN}

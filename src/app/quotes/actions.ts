@@ -9,13 +9,20 @@ import { computeLedger } from "@/lib/engine-server";
 // Ledger edits: quantity, quoted rate, include or exclude, swap the product.
 export async function updateLine(
   lineId: string,
-  patch: { qty?: number; quoted?: number | null; included?: boolean; familyId?: string | null }
+  patch: {
+    qty?: number;
+    quoted?: number | null;
+    included?: boolean;
+    familyId?: string | null;
+    // Merged into the line's inputs jsonb (materialByClient, tile sizes, ...)
+    inputs?: Record<string, unknown>;
+  }
 ): Promise<{ error?: string }> {
   await getProfile();
   const supabase = createServiceClient();
   const { data: line } = await supabase
     .from("quote_lines")
-    .select("id, quote_id, unit, quotes(status)")
+    .select("id, quote_id, unit, inputs, quotes(status)")
     .eq("id", lineId)
     .maybeSingle();
   if (!line) return { error: "Line not found" };
@@ -28,6 +35,7 @@ export async function updateLine(
   if (patch.quoted !== undefined) row.unit_price = patch.quoted;
   if (patch.included !== undefined) row.included = patch.included;
   if (patch.familyId !== undefined) row.family_id = patch.familyId;
+  if (patch.inputs !== undefined) row.inputs = { ...(line.inputs ?? {}), ...patch.inputs };
   const { error } = await supabase.from("quote_lines").update(row).eq("id", lineId);
   if (error) return { error: error.message };
   revalidatePath(`/quotes/${line.quote_id}`);
@@ -122,13 +130,13 @@ export async function issueQuote(
   if (belowFloor.length && !overrideReason) {
     return {
       needsOverride: true,
-      error: `${belowFloor.length} line${belowFloor.length === 1 ? "" : "s"} below the cost floor: ${belowFloor
+      error: `${belowFloor.length} line${belowFloor.length === 1 ? "" : "s"} below our cost: ${belowFloor
         .map((l) => l.description)
         .join(", ")}. An admin can issue with a reason.`,
     };
   }
   if (belowFloor.length && profile.role !== "admin") {
-    return { error: "Only an admin can issue below the cost floor." };
+    return { error: "Only an admin can issue below our cost." };
   }
 
   const { error } = await supabase

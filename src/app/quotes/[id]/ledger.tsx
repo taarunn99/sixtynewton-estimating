@@ -39,6 +39,26 @@ export function familiesForDiscipline(discipline: string, families: FamilyOption
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+
+// Application-only lines read "Application of ..." instead of "Supply and
+// application of ..."; the client supplies the material.
+export function displayDescription(description: string, materialByClient: boolean): string {
+  if (!materialByClient) return description;
+  const stripped = description.replace(/^Supply and application of\s+/i, "");
+  if (/^application of\s/i.test(stripped)) return stripped;
+  return `Application of ${stripped.charAt(0).toLowerCase()}${stripped.slice(1)}`;
+}
+
+function Info({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="ml-1 inline-grid h-[13px] w-[13px] cursor-help place-items-center rounded-full border border-[#B9AE99] align-[1px] text-[9px] leading-none text-[#8A929C]"
+    >
+      i
+    </span>
+  );
+}
 const fmtRate = (n: number) => (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 2 }));
 
 declare global {
@@ -182,7 +202,7 @@ function LineRow({
   return (
     <>
       <div
-        className={`grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] items-center gap-2 border-b border-[#EEEAE0] py-2 transition-colors hover:bg-[#FAF7EF] ${
+        className={`grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] items-center gap-2 border-b border-[#EEEAE0] py-2.5 transition-colors hover:bg-[#FAF7EF] ${
           included ? "" : "text-[#8A929C] opacity-70"
         }`}
       >
@@ -197,8 +217,10 @@ function LineRow({
           {included ? <span className="mb-0.5 h-[9px] w-[5px] rotate-45 border-b-2 border-r-2 border-white" /> : null}
         </button>
         <button className="text-left" onClick={() => setExpanded(!expanded)}>
-          <span className="block text-sm font-medium">{line.description}</span>
-          {line.detail ? <span className="block text-xs text-[#8A929C]">{line.detail}</span> : null}
+          <span className="block text-sm font-medium">
+            {displayDescription(line.description, line.materialByClient)}
+          </span>
+          {line.detail ? <span className="block text-xs font-light text-[#8A929C]">{line.detail}</span> : null}
         </button>
         <input
           className="w-[80px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm tabular-nums hover:border-[#CFD4DA] focus:border-[#CFD4DA] focus:bg-white focus:outline-none"
@@ -211,12 +233,21 @@ function LineRow({
           }}
         />
         <span className="text-xs text-[#8A929C]">{line.unit}</span>
-        <span className={`text-right text-sm font-medium tabular-nums text-[#4A6B8A] ${pending ? "opacity-40" : ""}`}>
+        <span
+          title={line.derivation.ourCost}
+          className={`cursor-help text-right text-[15px] font-semibold tabular-nums text-[#4A6B8A] ${pending ? "opacity-40" : ""}`}
+        >
           {fmt(displayFloor)}
         </span>
-        <span className={`text-right text-sm font-medium tabular-nums ${pending ? "opacity-40" : ""}`}>{fmt(displayCalc)}</span>
+        <span
+          title={line.derivation.suggested}
+          className={`cursor-help text-right text-[15px] font-semibold tabular-nums ${pending ? "opacity-40" : ""}`}
+        >
+          {fmt(displayCalc)}
+        </span>
         <input
-          className="w-[88px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm font-medium tabular-nums text-[#96772B] hover:border-[#C2A05C] focus:border-[#C2A05C] focus:bg-[#F6F0DF] focus:outline-none"
+          title="Your price: the rate you type, what the client sees."
+          className="w-[88px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-[15px] font-semibold tabular-nums text-[#96772B] hover:border-[#C2A05C] focus:border-[#C2A05C] focus:bg-[#F6F0DF] focus:outline-none"
           value={quoted}
           disabled={!editable}
           onFocus={() => {
@@ -243,13 +274,54 @@ function LineRow({
               <span>Consumables {fmtRate(line.breakdown.consumables)}</span>
               <span>Equipment {fmtRate(line.breakdown.equipment)}</span>
               <span className="font-medium">Cost {fmtRate(line.breakdown.cost)}</span>
-              <span className="text-[#4A6B8A]">Floor is cost plus overhead</span>
+              <span className="text-[#4A6B8A]">Our cost is cost plus overhead</span>
               {line.breakdown.crewCostReference !== null ? (
                 <span className="text-[#8A929C]">
                   Crew cost reference: {fmtRate(line.breakdown.crewCostReference)} per sqm, never applied to the price
                 </span>
               ) : null}
             </div>
+            {editable ? (
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={line.materialByClient}
+                    onChange={(e) => save({ inputs: { materialByClient: e.target.checked } })}
+                    className="accent-[#1F2328]"
+                  />
+                  Material by client
+                  <Info text="Application only: material cost drops to zero, our cost becomes the crew cost reference, and the suggested price comes from the application-only rate table times the site labour multiplier." />
+                </label>
+                {line.isTiling ? (
+                  <span className="flex items-center gap-1.5">
+                    <label className="text-[#8A929C]">Tile size cm</label>
+                    <input
+                      type="number"
+                      defaultValue={line.tileWidthMm ? line.tileWidthMm / 10 : ""}
+                      placeholder="W"
+                      onBlur={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n > 0) save({ inputs: { tileWidthMm: n * 10 } });
+                      }}
+                      className="w-14 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                    />
+                    x
+                    <input
+                      type="number"
+                      defaultValue={line.tileLengthMm ? line.tileLengthMm / 10 : ""}
+                      placeholder="H"
+                      onBlur={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n > 0) save({ inputs: { tileLengthMm: n * 10 } });
+                      }}
+                      className="w-14 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                    />
+                    <Info text="Tile width and height in cm. Drives adhesive and grout consumption, and the application-only rate interpolated on tile area between 60x60 at 55 and large slabs at 120." />
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {line.nudges.length ? (
               <div className="flex flex-wrap gap-x-6 gap-y-1">
                 {line.nudges.map((n, i) => (
@@ -500,9 +572,18 @@ export function Ledger({
         <span className="text-[#5B636E]">Stage and product</span>
         <span className="text-right text-[#5B636E]">Qty</span>
         <span />
-        <span className="rounded-l bg-[#EEF3F7] px-1 py-0.5 text-right text-[#3E5C77]">Cost floor</span>
-        <span className="bg-[#F1EFEA] px-1 py-0.5 text-right text-[#1F2328]">Calculated</span>
-        <span className="rounded-r bg-[#F6F0DF] px-1 py-0.5 text-right text-[#96772B]">Quoted</span>
+        <span className="rounded-l bg-[#EEF3F7] px-1 py-0.5 text-right text-[#3E5C77]">
+          Our cost
+          <Info text="What the job costs us per unit: material plus labour plus consumables, plus overhead. Selling below this loses money." />
+        </span>
+        <span className="bg-[#F1EFEA] px-1 py-0.5 text-right text-[#1F2328]">
+          Suggested price
+          <Info text="Our cost plus the standard margin, rounded. The engine's recommendation." />
+        </span>
+        <span className="rounded-r bg-[#F6F0DF] px-1 py-0.5 text-right text-[#96772B]">
+          Your price
+          <Info text="The rate you type, what the client sees on the quotation." />
+        </span>
         <span />
       </div>
 
@@ -594,9 +675,9 @@ export function Ledger({
           <span />
         </div>
         <p className="pt-1 text-xs text-[#9A8E77]">
-          Quoted sits {deltaPct >= 0 ? "+" : ""}
-          {deltaPct.toFixed(1)}% against calculated and {overFloorPct >= 0 ? "+" : ""}
-          {overFloorPct.toFixed(1)}% over the cost floor.
+          Your price sits {deltaPct >= 0 ? "+" : ""}
+          {deltaPct.toFixed(1)}% against the suggested price and {overFloorPct >= 0 ? "+" : ""}
+          {overFloorPct.toFixed(1)}% over our cost.
         </p>
       </div>
 
@@ -605,7 +686,7 @@ export function Ledger({
         <div className="grid grid-cols-[110px_1fr_92px] gap-2 border-b border-[#E2E5E9] py-1.5 text-xs text-[#8A929C]">
           <span>Version</span>
           <span>Status</span>
-          <span className="text-right text-[#96772B]">Quoted</span>
+          <span className="text-right text-[#96772B]">Your price</span>
         </div>
         {data.revisions.map((r) => (
           <div key={r.revision} className="grid grid-cols-[110px_1fr_92px] gap-2 border-b border-[#E2E5E9] py-1.5 text-sm text-[#5B636E] last:border-b-0">

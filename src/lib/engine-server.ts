@@ -43,6 +43,12 @@ export type LedgerLine = {
     crewCostReference: number | null;
   };
   nudges: { rule: string; severity: string; message: string }[];
+  materialByClient: boolean;
+  isTiling: boolean;
+  tileLengthMm: number | null;
+  tileWidthMm: number | null;
+  // Plain-language tooltips: how each number was derived
+  derivation: { ourCost: string; suggested: string };
 };
 
 export type LedgerResult = {
@@ -108,7 +114,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
           "id, name, driver, pack_qty, pack_unit, coverage_value, coverage_unit, default_multiplier, waste_pct, coverage_confidence, manual_cost, manual_pack_qty, manual_pack_unit, representative_product_id, discipline"
         ),
       supabase.from("labour_tiers").select("id, name, crew_size, crew_day_cost, derived_application_rate_per_sqm, rate_confidence"),
-      supabase.from("stages").select("id, name, discipline, cure_days, consumable_per_sqm, default_productivity_sqm_per_crew_day, productivity_confidence, speed_weight, subsequent_coat_factor"),
+      supabase.from("stages").select("id, name, discipline, cure_days, consumable_per_sqm, default_productivity_sqm_per_crew_day, productivity_confidence, speed_weight, subsequent_coat_factor, application_rate_id"),
       quote.sites?.site_profile_id
         ? supabase.from("site_profiles").select("*").eq("id", quote.sites.site_profile_id).single()
         : Promise.resolve({ data: null }),
@@ -121,6 +127,8 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         .from("imported_quotes")
         .select("stage_id, family_id, rate, quote_number, quote_date_text"),
     ]);
+  const { data: appRates } = await supabase.from("application_rates").select("*");
+  const appRateById = new Map((appRates ?? []).map((r) => [r.id, r]));
 
   // Costs are only needed for families this quote references (primary and
   // secondary); one query instead of paging every family's representative.
@@ -202,20 +210,35 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
   );
 
   const stagesById = new Map<string, StageRef>(
-    (stageRows ?? []).map((s) => [
-      s.id,
-      {
-        id: s.id,
-        name: s.name,
-        discipline: s.discipline,
-        cureDays: num(s.cure_days),
-        consumablePerSqm: num(s.consumable_per_sqm),
-        productivity: num(s.default_productivity_sqm_per_crew_day),
-        productivityConfidence: s.productivity_confidence,
-        speedWeight: num(s.speed_weight),
-        subsequentCoatFactor: num(s.subsequent_coat_factor),
-      },
-    ])
+    (stageRows ?? []).map((s) => {
+      const ar = s.application_rate_id ? appRateById.get(s.application_rate_id) : null;
+      return [
+        s.id,
+        {
+          id: s.id,
+          name: s.name,
+          discipline: s.discipline,
+          cureDays: num(s.cure_days),
+          consumablePerSqm: num(s.consumable_per_sqm),
+          productivity: num(s.default_productivity_sqm_per_crew_day),
+          productivityConfidence: s.productivity_confidence,
+          speedWeight: num(s.speed_weight),
+          subsequentCoatFactor: num(s.subsequent_coat_factor),
+          applicationOnly: ar
+            ? ar.anchor_small_area !== null
+              ? {
+                  tiling: {
+                    smallArea: Number(ar.anchor_small_area),
+                    smallRate: Number(ar.anchor_small_rate),
+                    largeArea: Number(ar.anchor_large_area),
+                    largeRate: Number(ar.anchor_large_rate),
+                  },
+                }
+              : { rate: num(ar.rate) }
+            : null,
+        },
+      ];
+    })
   );
 
   const siteProfile: SiteProfileRef = profileRow
@@ -279,10 +302,45 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
   const ref: ReferenceData = { settings, familiesById, tiersById, stagesById };
   const totals = computeQuote(quoteInput, ref, history);
 
+  const r1 = (n: number) => Math.round(n * 10) / 10;
   const ledgerLines: LedgerLine[] = (lines ?? []).map((l, i) => {
     const b = totals.lines[i];
     const stage = l.stage_id ? stagesById.get(l.stage_id) : null;
     const family = l.family_id ? familiesById.get(l.family_id) : null;
+    const tier = l.inputs?.tierId ? tiersById.get(l.inputs.tierId as string) : null;
+    const appOnly = !!l.inputs?.materialByClient;
+    const mult = siteProfile.labourMultiplier;
+    const overheadPct = Math.round((num(quote.overhead_pct) ?? settings.defaultOverhead) * 100);
+    const marginPct = Math.round(
+      ((l.inputs?.marginOverride as number | undefined) ??
+        num(quote.margin_pct) ??
+        settings.defaultMargin) * 100
+    );
+    const multNote = mult !== 1 ? ` x site ${mult}` : "";
+    let ourCost: string;
+    let suggested: string;
+    if (appOnly) {
+      ourCost = b.crewCostReferencePerUnit !== null
+        ? `Our cost ${r1(b.floorPerUnit)} is the crew cost reference alone: crew day cost / productivity.`
+        : `Our cost ${r1(b.floorPerUnit)} is the labour rate; no crew reference available.`;
+      const isTilingStage = !!stage?.applicationOnly?.tiling;
+      suggested = isTilingStage
+        ? `Suggested price ${b.calculatedPerUnit} = tiling application-only rate interpolated on tile area between 60x60 at 55 and large slabs at 120${multNote}. Set the tile size on the line.`
+        : `Suggested price ${b.calculatedPerUnit} = application-only list rate${multNote}. List prices already carry margin.`;
+    } else if (l.unit === "lump" && b.costPerUnit < 1) {
+      ourCost = "Manual lump, no cost basis in the engine.";
+      suggested = "Suggested price follows your price for manual lumps.";
+    } else {
+      const parts = [`material ${r1(b.materialPerUnit)}`];
+      parts.push(
+        tier
+          ? `labour ${r1(b.labourPerUnit)} (${tier.name.toLowerCase()} ${tier.applicationRatePerSqm ?? "?"}${multNote})`
+          : `labour ${r1(b.labourPerUnit)}`
+      );
+      if (b.consumablesPerUnit) parts.push(`consumables ${r1(b.consumablesPerUnit)}`);
+      ourCost = `Our cost ${r1(b.floorPerUnit)} = ${parts.join(" + ")} + overhead ${overheadPct}%.`;
+      suggested = `Suggested price ${b.calculatedPerUnit} = our cost + margin ${marginPct}%, rounded.`;
+    }
     return {
       id: l.id,
       sort: l.sort,
@@ -307,6 +365,11 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         crewCostReference: b.crewCostReferencePerUnit,
       },
       nudges: b.nudges,
+      materialByClient: appOnly,
+      isTiling: !!stage?.applicationOnly?.tiling,
+      tileLengthMm: num(l.inputs?.tileLengthMm),
+      tileWidthMm: num(l.inputs?.tileWidthMm),
+      derivation: { ourCost, suggested },
     };
   });
 

@@ -56,44 +56,64 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
         >
           New quote <kbd className="rounded border border-[#1C1713]/30 px-1 text-[11px]">N</kbd>
         </Link>
+        <div className="mt-1 px-4 text-[11px] tracking-wide text-[#9A8E77]">
+          Clients and quotes
+        </div>
         <div className="flex-1 overflow-auto px-2 pb-4">
-          {[...byClient.entries()].map(([client, quotes]) => (
-            <div key={client} className="mt-2">
-              <div className="flex justify-between px-2 py-1 text-sm text-[#EDE6D6]">
-                <span>{client}</span>
-                <span className="text-xs text-[#9A8E77]">{quotes.length}</span>
-              </div>
-              <ul className="pl-2">
-                {quotes.map((q) => (
-                  <li key={q.id}>
-                    <Link
-                      href={`/quotes/${q.id}`}
-                      className={`grid grid-cols-[1fr_auto] gap-2 rounded-md px-2.5 py-1.5 text-sm ${
-                        q.id === ledger.quote.id
-                          ? "bg-[#2B231B] text-[#F4EEDE] shadow-[inset_3px_0_0_#C2A05C]"
-                          : "text-[#B9AE99] hover:bg-[#2B231B] hover:text-[#EDE6D6]"
-                      }`}
-                    >
-                      <span className="truncate">
-                        {q.number} R{q.revision}
-                      </span>
-                      <span
-                        className={`self-center rounded-full px-1.5 text-[11px] ${
-                          q.status === "won"
-                            ? "bg-[#2E4633] text-[#9FCE8F]"
-                            : q.status === "draft"
-                              ? "bg-[#3A3128] text-[#C2A05C]"
-                              : "bg-[#2B231B] text-[#9A8E77]"
-                        }`}
-                      >
-                        {STATUS_LABEL[q.status] ?? q.status}
-                      </span>
-                    </Link>
-                  </li>
+          {[...byClient.entries()].map(([client, quotes]) => {
+            const byNumber = new Map<string, typeof quotes>();
+            for (const q of quotes) {
+              if (!byNumber.has(q.number)) byNumber.set(q.number, []);
+              byNumber.get(q.number)!.push(q);
+            }
+            return (
+              <div key={client} className="mt-2">
+                <div className="flex justify-between px-2 py-1 text-sm text-[#EDE6D6]">
+                  <span>{client}</span>
+                  <span className="text-xs text-[#9A8E77]">{byNumber.size}</span>
+                </div>
+                {[...byNumber.entries()].map(([number, revisions]) => (
+                  <div key={number} className="mb-1 pl-2">
+                    <ul>
+                      {revisions.map((q) => (
+                        <li key={q.id}>
+                          <Link
+                            href={`/quotes/${q.id}`}
+                            className={`grid grid-cols-[1fr_auto] gap-2 rounded-md px-2.5 py-1.5 text-sm ${
+                              q.id === ledger.quote.id
+                                ? "bg-[#2B231B] text-[#F4EEDE] shadow-[inset_3px_0_0_#C2A05C]"
+                                : "text-[#B9AE99] hover:bg-[#2B231B] hover:text-[#EDE6D6]"
+                            }`}
+                          >
+                            <span className="truncate">
+                              {number} R{q.revision}
+                            </span>
+                            <span
+                              className={`self-center rounded-full px-1.5 text-[11px] ${
+                                q.status === "won"
+                                  ? "bg-[#2E4633] text-[#9FCE8F]"
+                                  : q.status === "draft"
+                                    ? "bg-[#3A3128] text-[#C2A05C]"
+                                    : "bg-[#2B231B] text-[#9A8E77]"
+                              }`}
+                            >
+                              {STATUS_LABEL[q.status] ?? q.status}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    {revisions.length > 1 ? (
+                      <div className="px-2.5 pt-0.5 text-[10px] text-[#8A7E68]">
+                        {revisions.map((q) => `R${q.revision}`).join(" and ")} are versions of the
+                        same quote
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
-              </ul>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
         <div className="flex justify-between border-t border-[#3A3128] px-4 py-2.5 text-xs text-[#9A8E77]">
           <span>{profile.full_name ?? "Signed in"}</span>

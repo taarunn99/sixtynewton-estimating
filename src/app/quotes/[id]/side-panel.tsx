@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function Markdown({ text }: { text: string }) {
+  return (
+    <div className="sn-md">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
 
 const KEYS: { label: string; k?: string; cls?: string; id?: string }[] = [
   { label: "7", k: "7" }, { label: "8", k: "8" }, { label: "9", k: "9" },
@@ -239,11 +249,13 @@ function AssistantThread({
               ) : null}
               {m.content ? (
                 <div
-                  className={`inline-block max-w-full whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-left text-xs ${
-                    m.role === "user" ? "bg-[#1F2328] text-white" : "bg-[#F1F2F4] text-[#1F2328]"
+                  className={`inline-block max-w-full rounded-lg px-2.5 py-1.5 text-left text-xs ${
+                    m.role === "user"
+                      ? "whitespace-pre-wrap bg-[#1F2328] text-white"
+                      : "bg-[#F1F2F4] text-[#1F2328]"
                   }`}
                 >
-                  {m.content}
+                  {m.role === "user" ? m.content : <Markdown text={m.content} />}
                   {m.streaming ? <span className="animate-pulse"> ...</span> : null}
                 </div>
               ) : m.streaming ? (

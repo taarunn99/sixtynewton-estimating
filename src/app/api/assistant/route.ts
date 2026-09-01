@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     .from("settings")
     .select("assistant_model, assistant_token_budget")
     .single();
-  const model = settings?.assistant_model ?? "claude-sonnet-4-6";
+  const model = settings?.assistant_model ?? "claude-fable-5";
   const budget = settings?.assistant_token_budget ?? 200000;
 
   // Token guard: per-quote budget, warn at 80%
@@ -192,6 +192,6 @@ export async function GET(request: NextRequest) {
     messages: rows ?? [],
     tokensUsed,
     tokenBudget: settings?.assistant_token_budget ?? 200000,
-    model: settings?.assistant_model ?? "claude-sonnet-4-6",
+    model: settings?.assistant_model ?? "claude-fable-5",
   });
 }
