@@ -37,6 +37,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="mb-2">
             {profile.full_name ?? "Signed in"} ({profile.role})
           </div>
+          <Link href="/account/password" className="mb-2 block hover:underline">
+            Change password
+          </Link>
           <form action={logout}>
             <Button variant="outline" size="sm" type="submit">
               Sign out
