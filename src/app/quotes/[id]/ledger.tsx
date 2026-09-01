@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { LedgerResult, LedgerLine } from "@/lib/engine-server";
-import { addStageLine, removeLine, updateLine, updateQuoteVariables } from "@/app/quotes/actions";
+import {
+  addStageLine,
+  createRevision,
+  issueQuote,
+  removeLine,
+  updateLine,
+  updateQuoteVariables,
+} from "@/app/quotes/actions";
 
 export type StageOption = {
   id: string;
@@ -308,6 +316,99 @@ function VarInput({ label, value, suffix, onSave, editable }: { label: string; v
   );
 }
 
+function HeaderActions({
+  quote,
+  editable,
+}: {
+  quote: LedgerResult["quote"];
+  editable: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [needsReason, setNeedsReason] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const issue = (withReason?: string) =>
+    startTransition(async () => {
+      setMessage(null);
+      const result = await issueQuote(quote.id, withReason);
+      if (result.needsOverride) {
+        setNeedsReason(true);
+        setMessage(result.error ?? null);
+      } else if (result.error) {
+        setMessage(result.error);
+      } else {
+        setNeedsReason(false);
+        router.refresh();
+      }
+    });
+
+  const revise = () =>
+    startTransition(async () => {
+      setMessage(null);
+      const result = await createRevision(quote.id);
+      if (result.error) setMessage(result.error);
+      else if (result.newId) router.push(`/quotes/${result.newId}`);
+    });
+
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-2">
+      <div className="flex gap-2">
+        <a
+          href={`/quotes/${quote.id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-[#CFD4DA] px-3 py-2 text-sm font-medium hover:border-[#5B636E]"
+        >
+          Preview PDF
+        </a>
+        {editable ? (
+          <button
+            onClick={() => issue()}
+            disabled={pending}
+            className="rounded-lg bg-[#1F2328] px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+          >
+            {pending ? "Working" : `Issue R${quote.revision}`}
+          </button>
+        ) : (
+          <button
+            onClick={revise}
+            disabled={pending}
+            className="rounded-lg bg-[#1F2328] px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+          >
+            {pending ? "Working" : `New revision R${quote.revision + 1}`}
+          </button>
+        )}
+      </div>
+      {message ? <p className="max-w-72 text-right text-xs text-[#A83232]">{message}</p> : null}
+      {needsReason ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (reason.trim()) issue(reason.trim());
+          }}
+          className="flex gap-1.5"
+        >
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason to issue below floor"
+            className="w-56 rounded border border-[#A83232] px-2 py-1 text-xs focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={pending || !reason.trim()}
+            className="rounded border border-[#A83232] px-2 py-1 text-xs text-[#A83232] disabled:opacity-50"
+          >
+            Issue anyway
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
 export function Ledger({
   data,
   stageOptions,
@@ -391,14 +492,7 @@ export function Ledger({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <button className="rounded-lg border border-[#CFD4DA] px-3 py-2 text-sm font-medium hover:border-[#5B636E]">
-            Preview PDF
-          </button>
-          <button className="rounded-lg bg-[#1F2328] px-3 py-2 text-sm font-medium text-white hover:bg-black">
-            Issue R{quote.revision}
-          </button>
-        </div>
+        <HeaderActions quote={quote} editable={editable} />
       </div>
 
       <div className="sticky top-0 z-10 mt-3.5 grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] gap-2 border-y border-[#E2E5E9] bg-white px-7 py-1.5 text-xs text-[#8A929C]">

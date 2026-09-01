@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { computeLedger } from "@/lib/engine-server";
 
 // Ledger edits: quantity, quoted rate, include or exclude, swap the product.
 export async function updateLine(
@@ -93,6 +95,191 @@ export async function removeLine(lineId: string): Promise<{ error?: string }> {
   if (error) return { error: error.message };
   revalidatePath(`/quotes/${line.quote_id}`);
   return {};
+}
+
+// Issue flow, spec 4.6 and 9: drafts become issued and immutable. Lines
+// quoted below the cost floor block the issue unless an admin gives a reason.
+export async function issueQuote(
+  quoteId: string,
+  overrideReason?: string
+): Promise<{ error?: string; needsOverride?: boolean }> {
+  const profile = await getProfile();
+  const supabase = createServiceClient();
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select("id, status, number, revision")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (!quote) return { error: "Quote not found" };
+  if (quote.status !== "draft") return { error: "Only drafts can be issued." };
+
+  const ledger = await computeLedger(quoteId);
+  if (!ledger) return { error: "Quote not found" };
+
+  const belowFloor = ledger.lines.filter(
+    (l) => l.included && l.nudges.some((n) => n.rule === "below_cost_floor")
+  );
+  if (belowFloor.length && !overrideReason) {
+    return {
+      needsOverride: true,
+      error: `${belowFloor.length} line${belowFloor.length === 1 ? "" : "s"} below the cost floor: ${belowFloor
+        .map((l) => l.description)
+        .join(", ")}. An admin can issue with a reason.`,
+    };
+  }
+  if (belowFloor.length && profile.role !== "admin") {
+    return { error: "Only an admin can issue below the cost floor." };
+  }
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({
+      status: "issued",
+      issued_at: new Date().toISOString(),
+      totals: {
+        totalQuoted: ledger.totals.totalQuoted,
+        totalCalculated: ledger.totals.totalCalculated,
+        totalFloor: ledger.totals.totalFloor,
+        quotedSubtotal: ledger.totals.quotedSubtotal,
+        issueOverrideReason: overrideReason ?? null,
+        issuedBy: profile.id,
+      },
+    })
+    .eq("id", quoteId);
+  if (error) return { error: error.message };
+  revalidatePath(`/quotes/${quoteId}`);
+  return {};
+}
+
+// New revision: copy the quote and its lines to R+1 as a draft. The source
+// stays untouched apart from issued becoming revised. Never overwrite.
+export async function createRevision(quoteId: string): Promise<{ error?: string; newId?: string }> {
+  await getProfile();
+  const supabase = createServiceClient();
+  const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).maybeSingle();
+  if (!quote) return { error: "Quote not found" };
+  if (quote.status === "draft") return { error: "This is already a draft. Edit it directly." };
+
+  const { data: maxRev } = await supabase
+    .from("quotes")
+    .select("revision")
+    .eq("number", quote.number)
+    .order("revision", { ascending: false })
+    .limit(1);
+  const nextRevision = (maxRev?.[0]?.revision ?? quote.revision) + 1;
+
+  const { id: _id, created_at: _c, updated_at: _u, ...rest } = quote;
+  void _id;
+  void _c;
+  void _u;
+  const { data: created, error } = await supabase
+    .from("quotes")
+    .insert({
+      ...rest,
+      revision: nextRevision,
+      status: "draft",
+      issued_at: null,
+      totals: null,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  const { data: lines } = await supabase.from("quote_lines").select("*").eq("quote_id", quoteId).order("sort");
+  if (lines?.length) {
+    const copies = lines.map((l) => {
+      const { id: _lid, created_at: _lc, ...lineRest } = l;
+      void _lid;
+      void _lc;
+      return { ...lineRest, quote_id: created.id };
+    });
+    const { error: e2 } = await supabase.from("quote_lines").insert(copies);
+    if (e2) return { error: e2.message };
+  }
+
+  if (quote.status === "issued") {
+    await supabase.from("quotes").update({ status: "revised" }).eq("id", quoteId);
+  }
+  revalidatePath(`/quotes/${created.id}`);
+  return { newId: created.id };
+}
+
+// New quote: find or create the client and site, take the next number.
+export async function createQuote(form: {
+  clientName: string;
+  siteName: string;
+  siteProfileId: string;
+  paymentTerms?: string;
+}): Promise<{ error?: string } | never> {
+  const profile = await getProfile();
+  const supabase = createServiceClient();
+  if (!form.clientName.trim() || !form.siteName.trim()) {
+    return { error: "Client and site are required." };
+  }
+
+  let { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("name", form.clientName.trim())
+    .maybeSingle();
+  if (!client) {
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({ name: form.clientName.trim() })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    client = data;
+  }
+
+  let { data: site } = await supabase
+    .from("sites")
+    .select("id")
+    .eq("name", form.siteName.trim())
+    .eq("client_id", client.id)
+    .maybeSingle();
+  if (!site) {
+    const { data, error } = await supabase
+      .from("sites")
+      .insert({
+        name: form.siteName.trim(),
+        client_id: client.id,
+        site_profile_id: form.siteProfileId,
+      })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    site = data;
+  } else {
+    await supabase.from("sites").update({ site_profile_id: form.siteProfileId }).eq("id", site.id);
+  }
+
+  const { data: numbers } = await supabase.from("quotes").select("number");
+  const maxNum = (numbers ?? []).reduce((max, q) => {
+    const n = parseInt(String(q.number).replace(/\D/g, ""), 10);
+    return Number.isFinite(n) && n > max ? n : max;
+  }, 0);
+  const number = `QT-${String(maxNum + 1).padStart(6, "0")}`;
+
+  const { data: created, error } = await supabase
+    .from("quotes")
+    .insert({
+      number,
+      revision: 1,
+      status: "draft",
+      client_id: client.id,
+      site_id: site.id,
+      quote_date: new Date().toISOString().slice(0, 10),
+      valid_days: 15,
+      tax_mode: "exclusive",
+      payment_terms:
+        form.paymentTerms?.trim() || "50% advance, 40% at half completion, 10% on completion",
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  redirect(`/quotes/${created.id}`);
 }
 
 // Variables panel edits.

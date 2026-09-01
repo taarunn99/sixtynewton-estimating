@@ -50,9 +50,12 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             <div className="text-[11px] tracking-wide text-[#8A929C]">Estimating</div>
           </div>
         </div>
-        <button className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-[#CFD4DA] bg-white px-3 py-2 text-left text-sm hover:border-[#B8953F]">
+        <Link
+          href="/quotes/new"
+          className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-[#CFD4DA] bg-white px-3 py-2 text-left text-sm hover:border-[#B8953F]"
+        >
           New quote <kbd className="rounded border border-[#CFD4DA] px-1 text-[11px] text-[#8A929C]">N</kbd>
-        </button>
+        </Link>
         <div className="flex-1 overflow-auto px-2 pb-4">
           {[...byClient.entries()].map(([client, quotes]) => (
             <div key={client} className="mt-2">
