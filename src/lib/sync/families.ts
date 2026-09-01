@@ -71,7 +71,70 @@ export const FAMILY_RULES: FamilyRule[] = [
   { pattern: /\bmapecoat\s+tns\s+line/i, family: "Mapei Mapecoat TNS Line (5 kg)" },
   { pattern: /\bmapecoat\s+tns\s+primer/i, family: "Mapei Mapecoat TNS Primer EPW (A+B)" },
   { pattern: /\bmapecoat\s+i\s*w\b/i, family: "Mapei Mapecoat I W (epoxy, tanks)" },
+
+  // Kerakoll
+  { pattern: /\bfugabella\b/i, family: "Kerakoll Fugabella Color (3 kg)" },
+  { pattern: /\bfugalite\b/i, family: "Kerakoll Fugalite Color (epoxy)" },
+  { pattern: /\baquastop\s*nanoflex/i, family: "Kerakoll Aquastop Nanoflex" },
+  { pattern: /\baquastop\s*flex/i, family: "Kerakoll Aquastop Flex (A+B)" },
+  { pattern: /\bh40\s*icon/i, family: "Kerakoll H40 Icon (25 kg)" },
+  { pattern: /\bh40\b/i, family: "Kerakoll H40 Gel (25 kg)" },
+  { pattern: /\bbiogel\b/i, family: "Kerakoll Biogel No Limits" },
+  { pattern: /\bbioflex\b/i, family: "Kerakoll Bioflex (25 kg)" },
+  { pattern: /\bpragma\b/i, family: "Kerakoll Pragma Flex (25 kg)" },
+  { pattern: /\bcementoresina\b/i, family: "Kerakoll Cementoresina" },
+  { pattern: /kerakoll.*silicone/i, family: "Kerakoll Silicone Color" },
+  { pattern: /\bactive\s*prime/i, family: "Kerakoll Active Prime Grip" },
+  { pattern: /\bmicroresina\b/i, family: "Kerakoll Microresina KK2 (incl. primer)" },
+  { pattern: /\bwallcrete\b/i, family: "Kerakoll Wallcrete Living KK72 (incl. primer)" },
+  { pattern: /kerakoll.*absolute|absolute.*kerakoll/i, family: "Kerakoll Absolute decorative paint" },
+  { pattern: /\bdecor\s*kk\s*72/i, family: "Kerakoll Absolute decorative paint" },
+
+  // Weber
+  { pattern: /weberdry\s*prime\s*wb/i, family: "Weber weberdry Prime WB" },
+  { pattern: /weberdry\s*prime\s*sb/i, family: "Weber weberdry Prime SB" },
+  { pattern: /weberdry\s*110/i, family: "Weber weberdry 110 FX" },
+  { pattern: /weberdry\s*116/i, family: "Weber weberdry 116 FX" },
+  { pattern: /weberdry\s*136/i, family: "Weber weberdry 136 FX" },
+  { pattern: /weberdry\s*130/i, family: "Weber weberdry 130 PR" },
+  { pattern: /weberdry\s*150/i, family: "Weber weberdry 150 BLC" },
+  { pattern: /weberdry\s*360/i, family: "Weber weberdry 360 PU" },
+  { pattern: /weberdry\s*fabric/i, family: "Weber weberdry Fabric FX (50 lm)" },
+  { pattern: /\bbiflex\b/i, family: "Weber Biflex PL anti-root 4 mm (10 sqm)" },
+  { pattern: /epo\s*450/i, family: "Weber webertec Epo 450 PC kit (27.8 kg)" },
+  { pattern: /webercol\s*premium/i, family: "Weber webercol Premium (25 kg)" },
+  { pattern: /webercol\s*flex/i, family: "Weber webercol Flex kit" },
+  { pattern: /webercol\s*plus/i, family: "Weber webercol Plus (25 kg)" },
+  { pattern: /\bweberjoint\b/i, family: "Weber weberjoint (20 kg)" },
+
+  // Fosroc
+  { pattern: /nitocote\s*cm\s*210|\bcm\s*210\b/i, family: "Fosroc Nitocote CM210" },
+  { pattern: /renderoc\s*hs/i, family: "Fosroc Renderoc HS (25 kg)" },
+  { pattern: /renderoc\s*fc/i, family: "Fosroc Renderoc FC (25 kg)" },
+  { pattern: /renderoc\s*la/i, family: "Fosroc Renderoc LA (25 kg, flowable)" },
+
+  // Laticrete
+  { pattern: /hydro\s*ban/i, family: "Laticrete Hydro Ban" },
+  { pattern: /latascreed\s*pm\s*30/i, family: "Laticrete Latascreed PM30 (50 kg)" },
+  { pattern: /permacolor/i, family: "Laticrete Permacolor Grout FS (5 kg)" },
+  { pattern: /laticrete\s*254|254\s*platinum/i, family: "Laticrete 254 Platinum Rapid" },
+  { pattern: /latapoxy/i, family: "Laticrete Latapoxy Stone Adhesive (10 L)" },
+
+  // Awazel
+  { pattern: /awazel\s*py\s*40|py\s*40\s*l/i, family: "Awazel PY40 L 4 mm SBS" },
 ];
+
+// Brands that are tools, trims and accessories, never priced as materials by
+// the estimating engine. Review queue items from these brands are resolved as
+// not applicable.
+export const NOT_APPLICABLE_BRANDS = [
+  "dewalt", "profilpas", "bihui", "rubi", "montolit", "vixtron",
+];
+
+export function isNotApplicableBrand(itemName: string, brand: string | null): boolean {
+  const hay = `${itemName} ${brand ?? ""}`.toLowerCase();
+  return NOT_APPLICABLE_BRANDS.some((b) => hay.includes(b));
+}
 
 export function matchFamily(itemName: string): string | null {
   for (const rule of FAMILY_RULES) {
