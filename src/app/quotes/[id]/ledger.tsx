@@ -147,16 +147,26 @@ function LineRow({
   const [expanded, setExpanded] = useState(false);
   const [qty, setQty] = useState(String(line.qty));
   const [quoted, setQuoted] = useState(line.quoted === null ? "" : String(line.quoted));
+  // Optimistic include state: the tick flips instantly, the engine recompute
+  // streams in behind it. Server truth wins when the new ledger arrives.
+  const [included, setIncluded] = useState(line.included);
   const [pending, startTransition] = useTransition();
   const isLump = line.unit === "lump";
 
   useEffect(() => setQty(String(line.qty)), [line.qty]);
   useEffect(() => setQuoted(line.quoted === null ? "" : String(line.quoted)), [line.quoted]);
+  useEffect(() => setIncluded(line.included), [line.included]);
 
   const save = (patch: Parameters<typeof updateLine>[1]) =>
     startTransition(async () => {
       await updateLine(line.id, patch);
     });
+
+  const toggleInclude = () => {
+    const next = !included;
+    setIncluded(next);
+    save({ included: next });
+  };
 
   const displayFloor = isLump ? line.floor : line.floor;
   const displayCalc = line.calculated;
@@ -165,18 +175,18 @@ function LineRow({
     <>
       <div
         className={`grid grid-cols-[28px_1fr_88px_44px_92px_92px_92px_26px] items-center gap-2 border-b border-[#E2E5E9] py-1.5 ${
-          line.included ? "" : "text-[#8A929C]"
-        } ${pending ? "opacity-60" : ""}`}
+          included ? "" : "text-[#8A929C]"
+        }`}
       >
         <button
           aria-label="include"
           disabled={!editable}
-          onClick={() => save({ included: !line.included })}
-          className={`grid h-[18px] w-[18px] place-items-center rounded border-[1.5px] ${
-            line.included ? "border-[#1F2328] bg-[#1F2328]" : "border-[#CFD4DA] bg-white"
+          onClick={toggleInclude}
+          className={`grid h-[18px] w-[18px] place-items-center rounded border-[1.5px] transition-colors ${
+            included ? "border-[#1F2328] bg-[#1F2328]" : "border-[#CFD4DA] bg-white"
           }`}
         >
-          {line.included ? <span className="mb-0.5 h-[9px] w-[5px] rotate-45 border-b-2 border-r-2 border-white" /> : null}
+          {included ? <span className="mb-0.5 h-[9px] w-[5px] rotate-45 border-b-2 border-r-2 border-white" /> : null}
         </button>
         <button className="text-left" onClick={() => setExpanded(!expanded)}>
           <span className="block text-sm font-medium">{line.description}</span>
@@ -193,10 +203,10 @@ function LineRow({
           }}
         />
         <span className="text-xs text-[#8A929C]">{line.unit}</span>
-        <span className="text-right text-sm font-medium tabular-nums text-[#4A6B8A]">
-          {fmt(isLump ? displayFloor : displayFloor)}
+        <span className={`text-right text-sm font-medium tabular-nums text-[#4A6B8A] ${pending ? "opacity-40" : ""}`}>
+          {fmt(displayFloor)}
         </span>
-        <span className="text-right text-sm font-medium tabular-nums">{fmt(displayCalc)}</span>
+        <span className={`text-right text-sm font-medium tabular-nums ${pending ? "opacity-40" : ""}`}>{fmt(displayCalc)}</span>
         <input
           className="w-[88px] rounded border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm font-medium tabular-nums text-[#B8953F] hover:border-[#B8953F] focus:border-[#B8953F] focus:bg-[#F6F0DF] focus:outline-none"
           value={quoted}

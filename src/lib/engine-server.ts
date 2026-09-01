@@ -98,7 +98,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     .maybeSingle();
   if (!quote) return null;
 
-  const [{ data: lines }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: revisions }] =
+  const [{ data: lines }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: revisions }, { data: importedRates }] =
     await Promise.all([
       supabase.from("quote_lines").select("*").eq("quote_id", quoteId).order("sort"),
       supabase.from("settings").select("*").single(),
@@ -117,15 +117,30 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         .select("id, revision, status, totals, updated_at")
         .eq("number", quote.number)
         .order("revision"),
+      supabase
+        .from("imported_quotes")
+        .select("stage_id, family_id, rate, quote_number, quote_date_text"),
     ]);
 
-  const repIds = (famRows ?? []).map((f) => f.representative_product_id).filter(Boolean);
+  // Costs are only needed for families this quote references (primary and
+  // secondary); one query instead of paging every family's representative.
+  const usedFamilyIds = new Set<string>();
+  for (const l of lines ?? []) {
+    if (l.family_id) usedFamilyIds.add(l.family_id);
+    for (const id of (l.inputs?.secondaryFamilyIds as string[] | undefined) ?? []) {
+      usedFamilyIds.add(id);
+    }
+  }
+  const repIds = (famRows ?? [])
+    .filter((f) => usedFamilyIds.has(f.id))
+    .map((f) => f.representative_product_id)
+    .filter(Boolean);
   const costById = new Map<string, { books_cost: number | null; cost_flag: string }>();
-  for (let i = 0; i < repIds.length; i += 200) {
+  if (repIds.length) {
     const { data } = await supabase
       .from("products")
       .select("id, books_cost, cost_flag")
-      .in("id", repIds.slice(i, i + 200));
+      .in("id", repIds);
     for (const p of data ?? []) costById.set(p.id, p);
   }
 
@@ -250,10 +265,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     overheadPct: num(quote.overhead_pct) ?? undefined,
   };
 
-  // History: issued quote lines plus imported observed rates by stage
-  const { data: importedRates } = await supabase
-    .from("imported_quotes")
-    .select("stage_id, family_id, rate, quote_number, quote_date_text");
+  // History: imported observed rates by stage
   const history: HistoryPoint[] = (importedRates ?? [])
     .filter((r) => r.rate !== null)
     .map((r) => ({
