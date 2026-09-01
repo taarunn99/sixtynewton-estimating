@@ -1,6 +1,10 @@
 # Project status
 
-Updated 1 Sep 2026. App: Sixty Newton estimating workbench. Repo: https://github.com/taarunn99/sixtynewton-estimating
+Updated 1 Sep 2026, evening. App: Sixty Newton estimating workbench, live at https://sixtynewton-estimating.vercel.app (Vercel functions in sin1, next to the ap-southeast-1 database). Repo: https://github.com/taarunn99/sixtynewton-estimating
+
+ATTENTION: the GitHub repo is public and contains client quotes and pricing. Make it private in GitHub settings (Settings, General, Danger zone, Change visibility), or run gh auth login and ask Claude Code to do it.
+
+Verified live 1 Sep 2026: login protection on every route, cron 401 without secret, three-price ledger with crew cost reference, instant include ticks, PDF preview, issue guard blocking below-floor issue with admin reason field, new quote form, admin settings with labour reference and logistics fields, assistant answering the 15-day what-if from engine output.
 
 ## Phase 1: foundation (done)
 
