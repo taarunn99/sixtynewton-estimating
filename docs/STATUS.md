@@ -27,9 +27,13 @@ Pending in phase 2:
 - Equipment costs (table exists, no data yet).
 - Manual purchase prices for the 13 unstocked families.
 
-## Phase 3: assistant (not started)
+## Phase 3: assistant (built 1 Sep 2026, pending live test on the deployed URL)
 
-Context packet, engine tool calls, streaming thread per quote, proactive nudges, client note drafting. The right column already reserves the space.
+- Context packet (src/lib/assistant/context.ts): quote header, compact lines with breakdowns and nudges, history matches per stage, stage catalogue, relevant settings. Assembled server side each turn.
+- Streaming route at /api/assistant (SSE), one conversation per quote, persisted in assistant_messages with per-message token counts. Model and budget from settings (assistant_model, assistant_token_budget); warn at 80%, refuse at 100%.
+- All nine spec tools (src/lib/assistant/tools.ts): recalc, add_line, update_line, remove_line, set_programme, set_site_profile, lookup_history, lookup_family, draft_note. Executors enforce draft-only mutations; the ledger refreshes after any mutating tool.
+- Thread UI in the workbench right column: opening nudge summary by severity (composed from the engine, no tokens spent), streaming replies, tool chips, drafted notes as copyable cards, compose box with model name and budget percentage.
+- Not yet done: per-nudge action buttons (Set to calculated, Keep and add reason), history comparison tables inside nudges, proactive what-if phrasing checks. Live round-trip untested locally because Node servers hang on this machine; test on the deployed URL.
 
 ## Phase 4: output (not started)
 
@@ -47,6 +51,16 @@ Crew-day maths is reference only: line breakdowns show "crew cost reference: X p
 - Logistics suggestion from tonnage: under 1 ton a pickup (cost in settings, currently 0, set it); otherwise ceil(tonnage / 4) trucks at 2,000. Island profiles add a barge at 200 per ton (Al Maya Island 2026, 16,000 for 80 t); mainland trucks only.
 
 Raise confidences once timesheets confirm. Tests in tests/labour-reference.test.ts.
+
+## Deploy to Vercel (manual, Tarun)
+
+The repo is deploy-ready: vercel.json schedules the nightly sync at 22:00 UTC (02:00 Dubai), the cron route checks CRON_SECRET, and middleware protects every route except static assets and the secret-guarded cron path.
+
+1. vercel.com, Add new project, import taarunn99/sixtynewton-estimating from GitHub. Framework preset Next.js, project name sixtynewton-estimating, defaults otherwise.
+2. Before the first deploy (or in Settings, Environment variables, then redeploy), add every variable from .env.local for Production: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY, ZOHO_ORG_ID, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, CRON_SECRET. SUPABASE_DB_PASSWORD is only for local migrations, skip it.
+3. Deploy. Vercel reads the cron from vercel.json and, because CRON_SECRET is set, calls the route with it as a bearer token automatically.
+4. Verify on the deployed URL: the root and /quotes redirect to /login when signed out; /api/cron/books-sync without the bearer token returns 401; sign in works and /account/password changes a password.
+5. In Settings, Deployment protection: leave Vercel authentication off, the app has its own login. Or keep it on for extra cover, both users would then also need Vercel access.
 
 ## Bring the dev server up
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const KEYS: { label: string; k?: string; cls?: string; id?: string }[] = [
   { label: "7", k: "7" }, { label: "8", k: "8" }, { label: "9", k: "9" },
@@ -24,7 +25,279 @@ function evaluate(expr: string): number | null {
   }
 }
 
-export function SidePanel() {
+type ThreadMessage = {
+  id: string;
+  role: "user" | "assistant" | "note";
+  content: string;
+  purpose?: string;
+  tools?: string[];
+  streaming?: boolean;
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  recalc: "Recalculated",
+  add_line: "Added a line",
+  update_line: "Updated a line",
+  remove_line: "Removed a line",
+  set_programme: "Set the programme",
+  set_site_profile: "Changed the site profile",
+  lookup_history: "Looked up history",
+  lookup_family: "Searched products",
+};
+
+function AssistantThread({
+  quoteId,
+  openingNudges,
+}: {
+  quoteId: string;
+  openingNudges: { severity: string; message: string }[];
+}) {
+  const router = useRouter();
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [meta, setMeta] = useState<{ model: string; used: number; budget: number }>({
+    model: "",
+    used: 0,
+    budget: 200000,
+  });
+  const [warn, setWarn] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/assistant?quoteId=${quoteId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setMessages(
+          (data.messages as { id: string; role: string; content: string; tool_calls: { name: string }[] | null }[])
+            .filter((m) => m.content || m.tool_calls?.length)
+            .map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              tools: m.tool_calls?.map((t) => t.name),
+            }))
+        );
+        setMeta({ model: data.model, used: data.tokensUsed, budget: data.tokenBudget });
+      })
+      .catch(() => {});
+  }, [quoteId]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages]);
+
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || busy) return;
+      setBusy(true);
+      setWarn(null);
+      const localId = `local-${Date.now()}`;
+      setMessages((m) => [
+        ...m,
+        { id: `${localId}-u`, role: "user", content: text },
+        { id: localId, role: "assistant", content: "", streaming: true },
+      ]);
+      setInput("");
+      try {
+        const res = await fetch("/api/assistant", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ quoteId, message: text }),
+        });
+        if (!res.ok || !res.body) {
+          const detail = res.status === 402 ? (await res.json()).error : "The assistant did not respond.";
+          setMessages((m) =>
+            m.map((x) => (x.id === localId ? { ...x, content: detail, streaming: false } : x))
+          );
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let mutated = false;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const raw of events) {
+            if (!raw.startsWith("data: ")) continue;
+            const ev = JSON.parse(raw.slice(6));
+            if (ev.type === "text") {
+              setMessages((m) =>
+                m.map((x) => (x.id === localId ? { ...x, content: x.content + ev.delta } : x))
+              );
+            } else if (ev.type === "tool") {
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === localId ? { ...x, tools: [...(x.tools ?? []), ev.name] } : x
+                )
+              );
+            } else if (ev.type === "note") {
+              setMessages((m) => [
+                ...m.filter((x) => x.id !== localId),
+                { id: `note-${Date.now()}-${Math.random()}`, role: "note", purpose: ev.purpose, content: ev.text },
+                m.find((x) => x.id === localId)!,
+              ]);
+            } else if (ev.type === "warn") {
+              setWarn(ev.message);
+            } else if (ev.type === "error") {
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === localId
+                    ? { ...x, content: x.content || ev.message, streaming: false }
+                    : x
+                )
+              );
+            } else if (ev.type === "done") {
+              mutated = ev.mutated;
+              setMeta((prev) => ({ ...prev, used: ev.tokensUsed, budget: ev.tokenBudget }));
+            }
+          }
+        }
+        setMessages((m) => m.map((x) => (x.id === localId ? { ...x, streaming: false } : x)));
+        if (mutated) router.refresh();
+      } catch {
+        setMessages((m) =>
+          m.map((x) =>
+            x.id === localId
+              ? { ...x, content: x.content || "The connection dropped. Try again.", streaming: false }
+              : x
+          )
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, quoteId, router]
+  );
+
+  const bySeverity = { block: [] as string[], warn: [] as string[], info: [] as string[] };
+  for (const n of openingNudges) {
+    (bySeverity[n.severity as keyof typeof bySeverity] ?? bySeverity.info).push(n.message);
+  }
+  const pct = meta.budget ? Math.round((meta.used / meta.budget) * 100) : 0;
+
+  return (
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-auto p-3.5 text-sm">
+        <div className="mb-3 rounded-lg border border-[#E2E5E9] bg-[#FAFAFB] p-3 text-xs">
+          <div className="mb-1.5 font-medium text-[#1F2328]">On open: nudges by severity</div>
+          {openingNudges.length === 0 ? (
+            <div className="text-[#5B636E]">No nudges. The quote is clean.</div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {bySeverity.block.map((msg, i) => (
+                <div key={`b${i}`} className="text-[#A83232]">{msg}</div>
+              ))}
+              {bySeverity.warn.map((msg, i) => (
+                <div key={`w${i}`} className="text-[#B8741A]">{msg}</div>
+              ))}
+              {bySeverity.info.map((msg, i) => (
+                <div key={`i${i}`} className="text-[#4A6B8A]">{msg}</div>
+              ))}
+            </div>
+          )}
+          {openingNudges.length > 0 ? (
+            <button
+              onClick={() => send("Explain the current nudges and what you propose for each.")}
+              disabled={busy}
+              className="mt-2 rounded border border-[#CFD4DA] bg-white px-2 py-1 text-[11px] hover:border-[#5B636E] disabled:opacity-50"
+            >
+              Explain and propose fixes
+            </button>
+          ) : null}
+        </div>
+
+        {messages.map((m) =>
+          m.role === "note" ? (
+            <div key={m.id} className="mb-2.5 rounded-lg border border-[#B8953F] bg-[#F6F0DF] p-2.5 text-xs">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-medium text-[#B8741A]">{m.purpose ?? "Drafted note"}</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(m.content)}
+                  className="rounded border border-[#B8953F] px-1.5 py-0.5 text-[10px] text-[#B8741A]"
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="whitespace-pre-wrap text-[#1F2328]">{m.content}</div>
+            </div>
+          ) : (
+            <div key={m.id} className={`mb-2.5 ${m.role === "user" ? "text-right" : ""}`}>
+              {m.tools?.length ? (
+                <div className="mb-1 flex flex-wrap gap-1">
+                  {m.tools.map((t, i) => (
+                    <span key={i} className="rounded-full bg-[#E4E7EB] px-2 py-0.5 text-[10px] text-[#5B636E]">
+                      {TOOL_LABELS[t] ?? t}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {m.content ? (
+                <div
+                  className={`inline-block max-w-full whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-left text-xs ${
+                    m.role === "user" ? "bg-[#1F2328] text-white" : "bg-[#F1F2F4] text-[#1F2328]"
+                  }`}
+                >
+                  {m.content}
+                  {m.streaming ? <span className="animate-pulse"> ...</span> : null}
+                </div>
+              ) : m.streaming ? (
+                <div className="inline-block rounded-lg bg-[#F1F2F4] px-2.5 py-1.5 text-xs text-[#8A929C]">
+                  Thinking
+                  <span className="animate-pulse"> ...</span>
+                </div>
+              ) : null}
+            </div>
+          )
+        )}
+        {warn ? <div className="mb-2 text-[11px] text-[#B8741A]">{warn}</div> : null}
+      </div>
+
+      <div className="border-t border-[#E2E5E9] px-3.5 py-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="flex flex-col gap-1.5 rounded-xl border border-[#CFD4DA] px-2.5 py-2"
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            disabled={busy}
+            placeholder="Ask about this quote"
+            className="w-full bg-transparent text-sm outline-none disabled:opacity-50"
+          />
+          <div className="flex items-center justify-between text-xs text-[#8A929C]">
+            <span>
+              {meta.model || "Assistant"}, {pct}% of token budget
+            </span>
+            <button
+              type="submit"
+              disabled={busy || !input.trim()}
+              className="grid h-6 w-6 place-items-center rounded-full bg-[#1F2328] text-white disabled:bg-[#E4E7EB] disabled:text-[#8A929C]"
+            >
+              ↑
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
+export function SidePanel({
+  quoteId,
+  openingNudges,
+}: {
+  quoteId: string;
+  openingNudges: { severity: string; message: string }[];
+}) {
   const [expr, setExpr] = useState("");
   const [display, setDisplay] = useState("0");
 
@@ -116,26 +389,7 @@ export function SidePanel() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-3.5 text-sm text-[#5B636E]">
-        <div className="rounded-lg border border-dashed border-[#CFD4DA] p-3 text-xs text-[#8A929C]">
-          The assistant thread arrives in phase 3. It will open each quote with the nudges by
-          severity and apply changes through engine tools only.
-        </div>
-      </div>
-
-      <div className="border-t border-[#E2E5E9] px-3.5 py-3">
-        <div className="flex flex-col gap-1.5 rounded-xl border border-[#CFD4DA] px-2.5 py-2">
-          <input
-            disabled
-            placeholder="Ask about this quote (phase 3)"
-            className="w-full bg-transparent text-sm outline-none"
-          />
-          <div className="flex items-center justify-between text-xs text-[#8A929C]">
-            <span>Assistant offline</span>
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-[#E4E7EB]">↑</span>
-          </div>
-        </div>
-      </div>
+      <AssistantThread quoteId={quoteId} openingNudges={openingNudges} />
     </aside>
   );
 }

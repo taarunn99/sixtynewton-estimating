@@ -111,7 +111,15 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
         />
       </main>
 
-      <SidePanel />
+      <SidePanel
+        quoteId={ledger.quote.id}
+        openingNudges={[
+          ...ledger.lines.flatMap((l) =>
+            l.nudges.map((n) => ({ severity: n.severity, message: n.message }))
+          ),
+          ...ledger.quoteNudges.map((n) => ({ severity: n.severity, message: n.message })),
+        ]}
+      />
     </div>
   );
 }
