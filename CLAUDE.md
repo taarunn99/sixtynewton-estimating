@@ -20,6 +20,7 @@ Next.js 15 App Router, TypeScript strict, Tailwind, shadcn/ui, Supabase (Postgre
 - Cost data stays server side. Service role key only in server actions and route handlers.
 - Numbers: tabular figures, AED with thousands separators, unit rates rounded per spec 4.6.
 - Colour carries meaning only: slate = cost floor, ink = calculated, gold = quoted, amber = warn, red = block, green = won.
+- Never print passwords, API keys or tokens in chat output, logs, commits or files outside .env.local. When an account needs a password, send a Supabase recovery link or have the user set it themselves in the dashboard.
 
 ## Environment (in .env.local, never committed)
 NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
