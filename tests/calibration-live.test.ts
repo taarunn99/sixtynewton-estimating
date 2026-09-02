@@ -35,7 +35,10 @@ describe.skipIf(!hasLiveEnv)("QT-000299 live calibration", () => {
     expect(totals.totalCalculated).toBeLessThan(286125 * 1.15);
   });
 
-  it("R2: all lines ticked, quoted subtotal multiplies through to about 249,000", async () => {
+  // R2 is a living draft, so no fixed total: the durable assertion is that
+  // the engine's quoted subtotal equals the manual qty x rate sum exactly.
+  // (Verified at 248,005 on 1 Sep 2026 against Tarun's expected 249,000.)
+  it("R2: all lines ticked, quantities multiply through to the quoted subtotal exactly", async () => {
     const { quoteInput, ref, lines } = await loadLiveQuote("QT-000299", 2, { includeAll: true });
     const totals = computeQuote(quoteInput, ref);
 
@@ -46,7 +49,6 @@ describe.skipIf(!hasLiveEnv)("QT-000299 live calibration", () => {
     // eslint-disable-next-line no-console
     console.log("R2 quoted subtotal:", Math.round(totals.quotedSubtotal), "manual sum:", Math.round(manual));
     expect(totals.quotedSubtotal).toBeCloseTo(manual, 4);
-    expect(totals.quotedSubtotal).toBeGreaterThan(240000);
-    expect(totals.quotedSubtotal).toBeLessThan(258000);
+    expect(totals.quotedSubtotal).toBeGreaterThan(0);
   });
 });

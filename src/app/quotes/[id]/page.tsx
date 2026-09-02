@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { computeLedger } from "@/lib/engine-server";
 import { Ledger } from "./ledger";
 import { SidePanel } from "./side-panel";
+import { DeleteControls } from "./delete-controls";
 
 export default async function QuotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +14,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   if (!ledger) notFound();
 
   const supabase = await createClient();
-  const [{ data: allQuotes }, { data: stageOptions }, { data: familyOptions }] = await Promise.all([
+  const [{ data: allQuotes }, { data: stageOptions }, { data: familyOptions }, { data: quoteRow }] = await Promise.all([
     supabase
       .from("quotes")
       .select("id, number, revision, status, quote_date, clients(name)")
@@ -24,6 +25,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       .select("id, name, discipline, unit_of_sale, default_family_id")
       .order("sort_order"),
     supabase.from("product_families").select("id, name, discipline, brand").order("name"),
+    supabase.from("quotes").select("client_id").eq("id", id).single(),
   ]);
 
   const byClient = new Map<string, NonNullable<typeof allQuotes>>();
@@ -140,6 +142,16 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             brand: f.brand ?? "",
           }))}
         />
+        {profile.role === "admin" ? (
+          <div className="mx-auto mt-3 max-w-[980px] px-1">
+            <DeleteControls
+              quoteId={ledger.quote.id}
+              quoteNumber={`${ledger.quote.number} (all revisions)`}
+              clientId={quoteRow?.client_id ?? null}
+              clientName={ledger.quote.clientName}
+            />
+          </div>
+        ) : null}
       </main>
 
       <SidePanel

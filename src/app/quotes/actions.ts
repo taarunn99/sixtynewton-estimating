@@ -290,6 +290,39 @@ export async function createQuote(form: {
   redirect(`/quotes/${created.id}`);
 }
 
+// Deletion, admin only, always behind a two-step confirm in the UI.
+// Deleting a quote removes all its revisions, lines and assistant thread.
+export async function deleteQuote(quoteId: string): Promise<{ error?: string }> {
+  const profile = await getProfile();
+  if (profile.role !== "admin") return { error: "Only an admin can delete quotes." };
+  const supabase = createServiceClient();
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select("number")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (!quote) return { error: "Quote not found" };
+  const { data: revisions } = await supabase.from("quotes").select("id").eq("number", quote.number);
+  const ids = (revisions ?? []).map((r) => r.id);
+  const { error } = await supabase.from("quotes").delete().in("id", ids);
+  if (error) return { error: error.message };
+  redirect("/quotes");
+}
+
+// Deleting a client removes the client, their sites, and every quote of theirs.
+export async function deleteClient(clientId: string): Promise<{ error?: string }> {
+  const profile = await getProfile();
+  if (profile.role !== "admin") return { error: "Only an admin can delete clients." };
+  const supabase = createServiceClient();
+  const { error: qErr } = await supabase.from("quotes").delete().eq("client_id", clientId);
+  if (qErr) return { error: qErr.message };
+  const { error: sErr } = await supabase.from("sites").delete().eq("client_id", clientId);
+  if (sErr) return { error: sErr.message };
+  const { error } = await supabase.from("clients").delete().eq("id", clientId);
+  if (error) return { error: error.message };
+  redirect("/quotes");
+}
+
 // Variables panel edits.
 export async function updateQuoteVariables(
   quoteId: string,
