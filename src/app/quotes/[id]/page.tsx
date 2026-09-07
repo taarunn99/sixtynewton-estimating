@@ -6,6 +6,7 @@ import { computeLedger } from "@/lib/engine-server";
 import { Ledger } from "./ledger";
 import { SidePanel } from "./side-panel";
 import { DeleteControls } from "./delete-controls";
+import { FollowUpPanel } from "./follow-up-panel";
 
 export default async function QuotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +28,12 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
     supabase.from("product_families").select("id, name, discipline, brand").order("name"),
     supabase.from("quotes").select("client_id").eq("id", id).single(),
   ]);
+  const { data: followUps } = await supabase
+    .from("quote_followups")
+    .select("at, note")
+    .eq("quote_id", id)
+    .order("at", { ascending: false })
+    .limit(20);
 
   const byClient = new Map<string, NonNullable<typeof allQuotes>>();
   for (const q of allQuotes ?? []) {
@@ -38,9 +45,11 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   const STATUS_LABEL: Record<string, string> = {
     draft: "Draft",
     issued: "Issued",
+    followed_up: "Followed up",
     revised: "Revised",
     won: "Won",
     lost: "Lost",
+    expired: "Expired",
   };
 
   return (
@@ -144,6 +153,11 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             discipline: f.discipline ?? "Other",
             brand: f.brand ?? "",
           }))}
+        />
+        <FollowUpPanel
+          quoteId={ledger.quote.id}
+          status={ledger.quote.status}
+          followUps={(followUps ?? []).map((f) => ({ at: f.at, note: f.note, by: null }))}
         />
         {profile.role === "admin" ? (
           <div className="mx-auto mt-3 max-w-[980px] px-1">

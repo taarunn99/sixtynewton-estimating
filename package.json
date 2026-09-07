@@ -14,7 +14,8 @@
     "db:push": "tsx scripts/db-push.ts",
     "set-password": "tsx scripts/set-password.ts",
     "sync": "tsx scripts/first-sync.ts",
-    "fixtures": "tsx scripts/make-fixtures.ts"
+    "fixtures": "tsx scripts/make-fixtures.ts",
+    "ratebook": "esbuild scripts/ratebook/make-esm.ts --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=node_modules/.ratebook.mjs --log-level=error && node node_modules/.ratebook.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",

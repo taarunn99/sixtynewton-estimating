@@ -205,7 +205,7 @@ export async function createRevision(quoteId: string): Promise<{ error?: string;
     if (e2) return { error: e2.message };
   }
 
-  if (quote.status === "issued") {
+  if (["issued", "followed_up", "expired"].includes(quote.status)) {
     await supabase.from("quotes").update({ status: "revised" }).eq("id", quoteId);
   }
   revalidatePath(`/quotes/${created.id}`);
@@ -288,6 +288,45 @@ export async function createQuote(form: {
     .single();
   if (error) return { error: error.message };
   redirect(`/quotes/${created.id}`);
+}
+
+// Quote lifecycle after issue: followed up (repeatable, logged), won, lost.
+// Won and Lost stop all reminders; Followed up resets the reminder clock.
+export async function markFollowedUp(
+  quoteId: string,
+  note?: string
+): Promise<{ error?: string }> {
+  const profile = await getProfile();
+  const supabase = createServiceClient();
+  const { data: quote } = await supabase.from("quotes").select("status").eq("id", quoteId).maybeSingle();
+  if (!quote) return { error: "Quote not found" };
+  if (!["issued", "followed_up", "expired"].includes(quote.status)) {
+    return { error: "Only issued quotations take follow-ups." };
+  }
+  const { error } = await supabase.from("quote_followups").insert({
+    quote_id: quoteId,
+    note: note?.trim() || null,
+    created_by: profile.id,
+  });
+  if (error) return { error: error.message };
+  await supabase.from("quotes").update({ status: "followed_up" }).eq("id", quoteId);
+  revalidatePath(`/quotes/${quoteId}`);
+  return {};
+}
+
+export async function setQuoteOutcome(
+  quoteId: string,
+  outcome: "won" | "lost"
+): Promise<{ error?: string }> {
+  await getProfile();
+  const supabase = createServiceClient();
+  const { data: quote } = await supabase.from("quotes").select("status").eq("id", quoteId).maybeSingle();
+  if (!quote) return { error: "Quote not found" };
+  if (["draft"].includes(quote.status)) return { error: "Issue the quotation first." };
+  const { error } = await supabase.from("quotes").update({ status: outcome }).eq("id", quoteId);
+  if (error) return { error: error.message };
+  revalidatePath(`/quotes/${quoteId}`);
+  return {};
 }
 
 // Deletion, admin only, always behind a two-step confirm in the UI.

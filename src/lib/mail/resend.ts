@@ -15,6 +15,7 @@ export async function sendMail(args: {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { error: "RESEND_API_KEY is not set" };
   const from = process.env.MAIL_FROM ?? "quotes@60newton.com";
+  const replyTo = process.env.MAIL_REPLY_TO ?? "tarun.s@lapizblue.com";
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -24,6 +25,7 @@ export async function sendMail(args: {
     },
     body: JSON.stringify({
       from: `Sixty Newton estimating <${from}>`,
+      reply_to: replyTo,
       to: args.to,
       subject: args.subject,
       html: args.html,

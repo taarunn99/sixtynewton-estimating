@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@react-pdf/renderer"],
   outputFileTracingIncludes: {
     "/quotes/[id]/pdf": ["./node_modules/pdfkit/js/**"],
+    "/api/ratebook": ["./node_modules/pdfkit/js/**"],
   },
 };
 
