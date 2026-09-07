@@ -47,6 +47,10 @@ Pending in phase 2:
 - New quote flow at /quotes/new: client (existing or new), site, site profile, payment terms; takes the next QT number; starts as an empty R1 draft.
 - Not done: Zoho Estimates push (spec marks it optional), import of the remaining 24 past quote PDFs (tooling pattern exists in scripts/import-qt299.ts).
 
+## Mail automation (7 Sep 2026)
+
+Weekly digest mail via Resend from quotes@60newton.com (domain verified), Mondays 08:00 Dubai through /api/cron/weekly-digest behind CRON_SECRET, to every app user. Content, internal only: quotes issued in the window with your-price totals, drafts in motion with below-our-cost line counts, drafts older than 14 days, Zoho sync additions and review queue size, suggestion coverage. No our-cost build-ups, nothing from the labour reference, no em or en dashes. Manual send: npx tsx scripts/send-digest.ts [email ...]. Test digest sent 7 Sep to both users. RESEND_API_KEY is set locally and in Vercel; MAIL_FROM defaults to quotes@60newton.com in code.
+
 ## Variables, quotability, cash, history (2 Sep 2026, docs/UPDATE_VARIABLES_CASH.md)
 
 - Variables panel v2: every variable shows its live AED effect and lands as a named adjustment row in totals with an (i). Built in: programme compression (site hours, deadline, days per week, crew-days), occupied building (productivity 0.85, suggestions +18%, typed labour untouched), night work (+10% on labour subtotal, editable), custom variables (percent on labour, percent on quote, fixed, per calendar day). No nudges from variables; nothing reaches the PDF as a row.
