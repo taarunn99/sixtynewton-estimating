@@ -42,7 +42,7 @@ export default async function SuggestionCoveragePage() {
       <div className="mb-4">
         <h1 className="font-serif text-xl font-semibold">Suggestion coverage</h1>
         <p className="mt-1 max-w-2xl text-sm text-neutral-500">
-          How many past quote rates back each stage's suggestions. Stages at zero run on the
+          How many past quote rates back the suggestions of each stage. Stages at zero run on the
           engine build-up alone; every imported quote thickens this. {zero} of {rows.length}{" "}
           stages currently have no history points.
         </p>
