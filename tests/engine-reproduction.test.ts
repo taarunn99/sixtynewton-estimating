@@ -194,7 +194,9 @@ describe("known below-cost lines trip the floor (spec section 8)", () => {
     expect(result.nudges.some((n) => n.rule === "below_cost_floor")).toBe(true);
   });
 
-  it("QT-000301 water-based primer at 4 blocks below floor", () => {
+  // Labour model redesign: our cost excludes labour, so primer at 4 clears
+  // the material-only floor (3.4 documented) but still warns below suggested.
+  it("QT-000301 water-based primer at 4 clears the material floor, warns below suggested", () => {
     const primer = fam("Mapei Primer G (diluted)");
     const line = lineWith({
       familyId: primer.id,
@@ -203,7 +205,8 @@ describe("known below-cost lines trip the floor (spec section 8)", () => {
       inputs: {},
     });
     const result = computeLine(line, quoteWith([line]), refData());
-    expect(result.nudges.some((n) => n.rule === "below_cost_floor")).toBe(true);
+    expect(result.nudges.some((n) => n.rule === "below_cost_floor")).toBe(false);
+    expect(result.nudges.some((n) => n.rule === "below_calculated")).toBe(true);
   });
 
   it("QT-000269 screed at 10 cm for 130 blocks with Topcem Pronto (only site-mixed viable)", () => {

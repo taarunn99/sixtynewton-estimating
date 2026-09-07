@@ -45,10 +45,21 @@ export type LedgerLine = {
   nudges: { rule: string; severity: string; message: string }[];
   materialByClient: boolean;
   isTiling: boolean;
+  isThicknessDriver: boolean;
   tileLengthMm: number | null;
   tileWidthMm: number | null;
+  thicknessMm: number | null;
+  wallInstallation: boolean;
+  // Labour as an input: effective value, the greyed suggestion and its source
+  labour: {
+    effective: number;
+    suggested: number;
+    source: string;
+    absorbed: boolean;
+    overridden: boolean;
+  };
   // Plain-language tooltips: how each number was derived
-  derivation: { ourCost: string; suggested: string };
+  derivation: { ourCost: string; suggested: string; labour: string };
 };
 
 export type LedgerResult = {
@@ -72,6 +83,8 @@ export type LedgerResult = {
   };
   lines: LedgerLine[];
   totals: {
+    labourSuggestedTotal: number;
+    labourJobTotal: number | null;
     floorSubtotal: number;
     calculatedSubtotal: number;
     quotedSubtotal: number;
@@ -127,8 +140,25 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         .from("imported_quotes")
         .select("stage_id, family_id, rate, quote_number, quote_date_text"),
     ]);
-  const { data: appRates } = await supabase.from("application_rates").select("*");
+  const [{ data: appRates }, { data: anchorRows }, { data: labourHistoryRows }] = await Promise.all([
+    supabase.from("application_rates").select("*"),
+    supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm, band_note, flag_note"),
+    // Past labour values: edited labour on lines of issued or revised quotes
+    supabase
+      .from("quote_lines")
+      .select("stage_id, inputs, quotes!inner(status)")
+      .in("quotes.status", ["issued", "revised", "won"])
+      .not("stage_id", "is", null),
+  ]);
   const appRateById = new Map((appRates ?? []).map((r) => [r.id, r]));
+  const tileLabourAnchors = (anchorRows ?? []).map((a) => ({
+    areaSqm: Number(a.tile_area_sqm),
+    labourPerSqm: Number(a.labour_per_sqm),
+    note: [a.band_note, a.flag_note].filter(Boolean).join(". ") || null,
+  }));
+  const labourHistory = (labourHistoryRows ?? [])
+    .filter((r) => typeof r.inputs?.labourOverride === "number")
+    .map((r) => ({ stageId: r.stage_id as string, labourPerUnit: Number(r.inputs.labourOverride) }));
 
   // Costs are only needed for families this quote references (primary and
   // secondary); one query instead of paging every family's representative.
@@ -167,6 +197,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     logisticsTruckCost: num(settingsRow!.logistics_truck_cost) ?? undefined,
     logisticsTruckCapacityTons: num(settingsRow!.logistics_truck_capacity_tons) ?? undefined,
     logisticsBargePerTon: num(settingsRow!.logistics_barge_per_ton) ?? undefined,
+    tilingWallUplift: num(settingsRow!.tiling_wall_uplift) ?? undefined,
   };
 
   const familiesById = new Map<string, FamilyRef>(
@@ -286,6 +317,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     baseProgrammeCrewDays: num(quote.programme_base_crew_days),
     marginPct: num(quote.margin_pct) ?? undefined,
     overheadPct: num(quote.overhead_pct) ?? undefined,
+    labourJobTotal: num(quote.labour_job_total),
   };
 
   // History: imported observed rates by stage
@@ -299,7 +331,14 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       quoteDate: r.quote_date_text ?? "",
     }));
 
-  const ref: ReferenceData = { settings, familiesById, tiersById, stagesById };
+  const ref: ReferenceData = {
+    settings,
+    familiesById,
+    tiersById,
+    stagesById,
+    tileLabourAnchors,
+    labourHistory,
+  };
   const totals = computeQuote(quoteInput, ref, history);
 
   const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -317,30 +356,21 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         settings.defaultMargin) * 100
     );
     const multNote = mult !== 1 ? ` x site ${mult}` : "";
-    let ourCost: string;
-    let suggested: string;
-    if (appOnly) {
-      ourCost = b.crewCostReferencePerUnit !== null
-        ? `Our cost ${r1(b.floorPerUnit)} is the crew cost reference alone: crew day cost / productivity.`
-        : `Our cost ${r1(b.floorPerUnit)} is the labour rate; no crew reference available.`;
-      const isTilingStage = !!stage?.applicationOnly?.tiling;
-      suggested = isTilingStage
-        ? `Suggested price ${b.calculatedPerUnit} = tiling application-only rate interpolated on tile area between 60x60 at 55 and large slabs at 120${multNote}. Set the tile size on the line.`
-        : `Suggested price ${b.calculatedPerUnit} = application-only list rate${multNote}. List prices already carry margin.`;
-    } else if (l.unit === "lump" && b.costPerUnit < 1) {
-      ourCost = "Manual lump, no cost basis in the engine.";
-      suggested = "Suggested price follows your price for manual lumps.";
-    } else {
-      const parts = [`material ${r1(b.materialPerUnit)}`];
-      parts.push(
-        tier
-          ? `labour ${r1(b.labourPerUnit)} (${tier.name.toLowerCase()} ${tier.applicationRatePerSqm ?? "?"}${multNote})`
-          : `labour ${r1(b.labourPerUnit)}`
-      );
-      if (b.consumablesPerUnit) parts.push(`consumables ${r1(b.consumablesPerUnit)}`);
-      ourCost = `Our cost ${r1(b.floorPerUnit)} = ${parts.join(" + ")} + overhead ${overheadPct}%.`;
-      suggested = `Suggested price ${b.calculatedPerUnit} = our cost + margin ${marginPct}%, rounded.`;
-    }
+    // Our cost never includes labour (labour model redesign)
+    const ourCost =
+      l.unit === "lump" && b.materialPerUnit < 1
+        ? "Manual lump, no cost basis in the engine."
+        : `Our cost ${r1(b.floorPerUnit)} = material ${r1(b.materialPerUnit)}${b.consumablesPerUnit ? ` + consumables ${r1(b.consumablesPerUnit)}` : ""} + overhead ${overheadPct}%. Labour is not in our cost; it is your input below.`;
+    const suggested = appOnly
+      ? `Suggested price ${b.calculatedPerUnit} is the labour figure; the client supplies material and application-only rates already carry margin.`
+      : l.unit === "lump" && b.materialPerUnit < 1 && b.labourPerUnit < 1
+        ? "Suggested price follows your price for manual lumps."
+        : `Suggested price ${b.calculatedPerUnit} = (material ${r1(b.materialPerUnit)} + labour ${r1(b.labourPerUnit)}) + overhead ${overheadPct}% + margin ${marginPct}%, rounded.`;
+    const sourceNote =
+      b.labourSource === "labour tier" && tier
+        ? `labour tier (${tier.name.toLowerCase()} ${tier.applicationRatePerSqm ?? "?"}${multNote})`
+        : b.labourSource;
+    const labourDerivation = `Suggestion ${r1(b.labourSuggestedPerUnit)} from ${sourceNote}. Crew reference: a 5 person crew runs about 430 to 480 per day, near 17 to 19 per sqm at 25 sqm a day. Edit the figure and your value flows through; no warnings ever fire on labour.`;
     return {
       id: l.id,
       sort: l.sort,
@@ -367,9 +397,19 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       nudges: b.nudges,
       materialByClient: appOnly,
       isTiling: !!stage?.applicationOnly?.tiling,
+      isThicknessDriver: family?.driver === "thickness",
       tileLengthMm: num(l.inputs?.tileLengthMm),
       tileWidthMm: num(l.inputs?.tileWidthMm),
-      derivation: { ourCost, suggested },
+      thicknessMm: num(l.inputs?.thicknessMm),
+      wallInstallation: !!l.inputs?.wallInstallation,
+      labour: {
+        effective: b.labourPerUnit,
+        suggested: b.labourSuggestedPerUnit,
+        source: b.labourSource,
+        absorbed: b.labourSource === "absorbed",
+        overridden: b.labourSource === "manual",
+      },
+      derivation: { ourCost, suggested, labour: labourDerivation },
     };
   });
 
@@ -394,6 +434,8 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     },
     lines: ledgerLines,
     totals: {
+      labourSuggestedTotal: totals.labourSuggestedTotal,
+      labourJobTotal: totals.labourJobTotal,
       floorSubtotal: totals.floorSubtotal,
       calculatedSubtotal: totals.calculatedSubtotal,
       quotedSubtotal: totals.quotedSubtotal,

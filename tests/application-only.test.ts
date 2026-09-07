@@ -100,7 +100,9 @@ const baseLine = (over: Partial<LineInput>): LineInput => ({
 });
 
 describe("application-only pricing", () => {
-  it("material is zero, our cost is the crew cost reference alone", () => {
+  // Labour model redesign: labour left the floor entirely, so an
+  // application-only line's our cost is zero (no material, no consumables).
+  it("material is zero and our cost carries no labour at all", () => {
     const kerapoxy = fam("Mapei Kerapoxy (10 kg epoxy)");
     const b = computeLine(
       baseLine({ familyId: kerapoxy.id, tierId: tier.id, stageId: wpStage.id }),
@@ -108,8 +110,7 @@ describe("application-only pricing", () => {
       refData()
     );
     expect(b.materialPerUnit).toBe(0);
-    // crew ref: 470 / (25 x 0.8) = 23.5, no overhead, no margin
-    expect(b.floorPerUnit).toBe(23.5);
+    expect(b.floorPerUnit).toBe(0);
   });
 
   it("suggested price is the list rate times the site labour multiplier, no margin", () => {

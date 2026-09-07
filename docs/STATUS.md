@@ -47,6 +47,17 @@ Pending in phase 2:
 - New quote flow at /quotes/new: client (existing or new), site, site profile, payment terms; takes the next QT number; starts as an empty R1 draft.
 - Not done: Zoho Estimates push (spec marks it optional), import of the remaining 24 past quote PDFs (tooling pattern exists in scripts/import-qt299.ts).
 
+## Labour model redesign (2 Sep 2026, docs/UPDATE_LABOUR_MODEL.md)
+
+- Labour is a per-line editable input prefilled with a suggestion (greyed until edited, source named in the (i)): past quote-line labour medians first, then the tile ladder or application-only rate table, then the labour tier. No nudges ever fire on labour.
+- Our cost = material + consumables + overhead only. Labour left the floor. New R1 floors: screed 36, waterproofing 39.5, tile 19.5, grout 18 per sqm (floor subtotal 39,550 before VAT); zero lines below floor, calculated total 322,875 still within 15% of the issued 286,125.
+- Absorb labour in margin toggle per line, default on for prep stages (grinding, priming, surface prep; demolition excluded) when a main application stage of the same discipline is included.
+- Total labour for this job box in the variables panel: head contractor figure distributes pro rata to suggestions, lines mark "from job total", later per-line edits override their share.
+- Labour cost reference (admin, Labour reference): salaries, accommodation, visa (flag: monthly or per contract), daily wages, overtime rule, crew reference, and the confidential Al Wathba piece rates (admin only; a test asserts the table is referenced nowhere client-facing).
+- Tile labour ladder (admin editable, confidence M): 60x60 at 40, 60x120 at 65 (flag: two orientation bands given, midpoint used), 120x120 at 90, 240x240 at 115, linear on tile area, wall +10 (settings). Drives the tiling labour suggestion; adhesive and grout still come from tile dimensions.
+- Thickness (mm) input on thickness-driver lines; tile size and wall toggle on tiling lines.
+- 11 new quotes imported to history (67 observed rates now): 168, 184, 191, 237, 250, 256, 263, 291, 293, 295, 304, all rate points verified against the PDFs. Saveto Vetotop CS536 family added, Books linking via review queue.
+
 ## Calibration (1 Sep 2026, evening)
 
 Factors that stack on a line: material (waste, intercompany 1.09), labour tier rate x site labour multiplier (x noise 1.08 only when a profile sets it, off by default; upper floor factor off by default), consumables, overhead 12% to our cost, margin 25% to the suggested price, rounding per 4.6. Fixes: island multiplier 1.55 (was 2.0, single-comparison evidence), island profile noise off, demolition tier 75 (the 85.7 island observation was double counting with the multiplier), manual lumps pass through as suggested price. Live test in tests/calibration-live.test.ts: R1 all ticked prices to +12.8% of issued 286,125 with one line below our cost (the grout throw-in); R2 all ticked sums to 248,005.

@@ -1,7 +1,9 @@
 export * from "./types";
 export { materialPerUnit, totalMaterialPerUnit, snCostPerPack, groutKgPerSqm, adhesiveKgPerSqm } from "./material";
 export {
-  labourPerUnit,
+  labourMultiplier,
+  suggestLabour,
+  tileLadderLabour,
   crewCostReferencePerUnit,
   upperFloorFactor,
   applicationOnlyListRate,
@@ -10,4 +12,4 @@ export {
 } from "./pricing";
 export { computeProgramme, estimateCrewDays } from "./programme";
 export { suggestLogistics, type LogisticsSuggestion } from "./logistics";
-export { computeLine, computeQuote } from "./quote";
+export { computeLine, computeQuote, isPrepStage } from "./quote";

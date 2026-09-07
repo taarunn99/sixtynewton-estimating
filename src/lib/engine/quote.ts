@@ -10,11 +10,10 @@ import type {
 } from "./types";
 import { totalMaterialPerUnit } from "./material";
 import {
-  applicationOnlyListRate,
   crewCostReferencePerUnit,
-  labourPerUnit,
   priceFromCost,
   roundRate,
+  suggestLabour,
   upperFloorFactor,
 } from "./pricing";
 import { computeProgramme } from "./programme";
@@ -25,11 +24,31 @@ function median(values: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+// Prep stages default to absorbing their labour in the margin when a main
+// application stage of the same discipline is on the quote. Demolition is
+// not a prep stage.
+export function isPrepStage(name: string): boolean {
+  if (/demoli/i.test(name)) return false;
+  return /grind|prim/i.test(name) || /surface prep/i.test(name);
+}
+
+function absorbByDefault(line: LineInput, quote: QuoteInput, ref: ReferenceData): boolean {
+  const stage = line.stageId ? ref.stagesById.get(line.stageId) : null;
+  if (!stage || !isPrepStage(stage.name)) return false;
+  return quote.lines.some((other) => {
+    if (other.id === line.id || !other.included) return false;
+    const otherStage = other.stageId ? ref.stagesById.get(other.stageId) : null;
+    return !!otherStage && otherStage.discipline === stage.discipline && !isPrepStage(otherStage.name);
+  });
+}
+
 export function computeLine(
   line: LineInput,
   quote: QuoteInput,
   ref: ReferenceData,
-  history: HistoryPoint[] = []
+  history: HistoryPoint[] = [],
+  // Per-unit labour share from the quote-level job total, when distributed
+  jobTotalSharePerUnit: number | null = null
 ): LineBreakdown {
   const { settings } = ref;
   const family = line.familyId ? (ref.familiesById.get(line.familyId) ?? null) : null;
@@ -55,7 +74,6 @@ export function computeLine(
     });
   }
 
-  const labour = labourPerUnit(tier, line.inputs, quote.siteProfile, settings) ?? 0;
   const crewReference = crewCostReferencePerUnit(
     tier,
     line.inputs,
@@ -66,31 +84,55 @@ export function computeLine(
   const consumables = stage?.consumablePerSqm ?? 0;
   const equipment = 0;
 
+  // Labour is an input with a suggestion, never a nudge target. Resolution:
+  // absorbed (explicit, or default on prep stages when a main application
+  // stage of the same discipline is included) -> manual override -> share of
+  // the quote-level job total -> the engine suggestion.
+  const suggestion = suggestLabour({
+    stage,
+    tier,
+    inputs: line.inputs,
+    site: quote.siteProfile,
+    settings,
+    tileLabourAnchors: ref.tileLabourAnchors,
+    labourHistory: ref.labourHistory,
+  });
+  const absorbed = line.inputs.absorbLabour ?? absorbByDefault(line, quote, ref);
+  let labour: number;
+  let labourSource: LineBreakdown["labourSource"];
+  if (absorbed) {
+    labour = 0;
+    labourSource = "absorbed";
+  } else if (typeof line.inputs.labourOverride === "number") {
+    labour = line.inputs.labourOverride;
+    labourSource = "manual";
+  } else if (jobTotalSharePerUnit !== null) {
+    labour = jobTotalSharePerUnit;
+    labourSource = "job total";
+  } else {
+    labour = suggestion.value;
+    labourSource = suggestion.source;
+  }
+
   const overhead = quote.overheadPct ?? settings.defaultOverhead;
   const margin = line.inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
   const quotedEarly = line.quotedRate ?? null;
 
-  let costPerUnit: number;
-  let floorRounded: number;
+  // Our cost never includes labour (UPDATE_LABOUR_MODEL.md section 1):
+  // material + consumables + equipment, plus overhead.
+  const floorBase = material.value + consumables + equipment;
+  const { floor } = priceFromCost(floorBase, overhead, margin);
+  const floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
+
+  const costPerUnit = material.value + labour + consumables + equipment;
   let calculated: number;
   if (applicationOnly) {
-    // Application-only mode: client supplies material. Our cost is the crew
-    // cost reference alone; the suggested price is the application-only list
-    // rate (or the tier application rate when no list price exists) times the
-    // site labour multiplier. List prices already carry margin.
-    costPerUnit = crewReference ?? labour;
-    floorRounded = isLump ? Math.round(costPerUnit) : Math.round(costPerUnit * 2) / 2;
-    const listRate =
-      applicationOnlyListRate(stage, line.inputs) ??
-      line.inputs.applicationRateOverride ??
-      tier?.applicationRatePerSqm ??
-      0;
-    const priced = listRate * quote.siteProfile.labourMultiplier;
-    const sited = line.inputs.upperFloorOrRoof ? priced * upperFloorFactor(settings) : priced;
+    // Client supplies material: the suggested price is the labour figure
+    // itself; application-only list rates already carry margin.
+    const sited = line.inputs.upperFloorOrRoof ? labour * upperFloorFactor(settings) : labour;
     calculated = roundRate(sited, isLump);
   } else {
-    costPerUnit = material.value + labour + consumables + equipment;
-    const { floor, price } = priceFromCost(costPerUnit, overhead, margin);
+    const { price } = priceFromCost(costPerUnit, overhead, margin);
     const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
     const modelCalculated = roundRate(sited, isLump);
     // Manual lump lines (scaffolding, garbage, demolition priced as a lump):
@@ -99,7 +141,6 @@ export function computeLine(
     // dragging the calculated total to nothing the engine never meant.
     calculated =
       isLump && quotedEarly !== null && modelCalculated === 0 ? quotedEarly : modelCalculated;
-    floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
   }
 
   const quoted = line.quotedRate ?? null;
@@ -121,11 +162,12 @@ export function computeLine(
       lineId: line.id,
     });
   }
-  if (family?.coverageConfidence === "L" || stage?.productivityConfidence === "L") {
+  // No nudges ever fire on labour; low confidence only speaks about coverage.
+  if (family?.coverageConfidence === "L") {
     nudges.push({
       rule: "low_confidence",
       severity: "info",
-      message: "A low-confidence coverage or productivity feeds this line.",
+      message: "A low-confidence material coverage feeds this line.",
       lineId: line.id,
     });
   }
@@ -163,6 +205,8 @@ export function computeLine(
     lineId: line.id,
     materialPerUnit: material.value,
     labourPerUnit: labour,
+    labourSuggestedPerUnit: suggestion.value,
+    labourSource,
     consumablesPerUnit: consumables,
     equipmentPerUnit: equipment,
     crewCostReferencePerUnit: crewReference,
@@ -199,7 +243,41 @@ export function computeQuote(
   history: HistoryPoint[] = []
 ): QuoteTotals {
   const included = quote.lines.filter((l) => l.included);
-  const lines = quote.lines.map((l) => computeLine(l, quote, ref, history));
+
+  // Quote-level labour job total: distribute across labour-bearing lines pro
+  // rata to their suggestions; per-line overrides keep their own value. A
+  // line is labour-bearing when included, not rate-only, not absorbed, and
+  // its suggestion is above zero.
+  const suggestions = new Map<string, number>();
+  let suggestionWeight = 0;
+  for (const l of quote.lines) {
+    const stage = l.stageId ? (ref.stagesById.get(l.stageId) ?? null) : null;
+    const tier = l.tierId ? (ref.tiersById.get(l.tierId) ?? null) : null;
+    const s = suggestLabour({
+      stage,
+      tier,
+      inputs: l.inputs,
+      site: quote.siteProfile,
+      settings: ref.settings,
+      tileLabourAnchors: ref.tileLabourAnchors,
+      labourHistory: ref.labourHistory,
+    });
+    suggestions.set(l.id, s.value);
+    const absorbed = l.inputs.absorbLabour ?? absorbByDefault(l, quote, ref);
+    if (l.included && !l.isRateOnly && !absorbed && s.value > 0) {
+      suggestionWeight += s.value * l.qty;
+    }
+  }
+  const jobTotal = quote.labourJobTotal ?? null;
+  const sharePerUnit = (l: LineInput): number | null => {
+    if (jobTotal === null || suggestionWeight <= 0) return null;
+    const absorbed = l.inputs.absorbLabour ?? absorbByDefault(l, quote, ref);
+    const s = suggestions.get(l.id) ?? 0;
+    if (!l.included || l.isRateOnly || absorbed || s <= 0) return null;
+    return (jobTotal * s) / suggestionWeight;
+  };
+
+  const lines = quote.lines.map((l) => computeLine(l, quote, ref, history, sharePerUnit(l)));
   const includedBreakdowns = lines.filter(
     (b) => quote.lines.find((l) => l.id === b.lineId)?.included
   );
@@ -245,8 +323,16 @@ export function computeQuote(
   const calcWithProgramme = calculatedSubtotal + programme.upliftTotal;
   const floorWithProgramme = floorSubtotal + programme.upliftTotal;
 
+  const labourSuggestedTotal = quote.lines.reduce((s, l) => {
+    const absorbed = l.inputs.absorbLabour ?? absorbByDefault(l, quote, ref);
+    if (!l.included || l.isRateOnly || absorbed) return s;
+    return s + (suggestions.get(l.id) ?? 0) * l.qty;
+  }, 0);
+
   return {
     lines,
+    labourSuggestedTotal,
+    labourJobTotal: jobTotal,
     floorSubtotal,
     calculatedSubtotal,
     quotedSubtotal,

@@ -1,20 +1,101 @@
-// Labour, overhead, margin, rounding and VAT. Spec sections 4.2 and 4.6.
-import type { EngineSettings, LineInputs, SiteProfileRef, TierRef } from "./types";
+// Labour, overhead, margin, rounding and VAT. Spec sections 4.2 and 4.6,
+// labour model redesigned per docs/UPDATE_LABOUR_MODEL.md: labour is an
+// editable input with a suggestion; it never enters the cost floor and no
+// nudge ever fires on it.
+import type {
+  EngineSettings,
+  LabourHistoryPoint,
+  LabourSource,
+  LineInputs,
+  SiteProfileRef,
+  StageRef,
+  TierRef,
+  TileLabourAnchor,
+} from "./types";
 
-// Labour pricing (correction 1 Sep 2026): the price always comes from the
-// tier application rate x site labour multiplier. Crew day cost never prices
-// a line, even when it exists; see crewCostReferencePerUnit below.
-export function labourPerUnit(
-  tier: TierRef | null,
+// Site multiplier on labour: profile multiplier x noise uplift where set.
+export function labourMultiplier(site: SiteProfileRef, settings: EngineSettings): number {
+  const noise = site.noiseRestricted ? 1 + (settings.noiseLabourUplift ?? 0.08) : 1;
+  return site.labourMultiplier * noise;
+}
+
+// Tile labour ladder: labour per sqm for floor installation, interpolated
+// linearly on tile area between consecutive anchors, clamped at the ends.
+// Wall installation adds settings.tilingWallUplift (default 10).
+export function tileLadderLabour(
+  anchors: TileLabourAnchor[] | undefined,
   inputs: LineInputs,
-  site: SiteProfileRef,
   settings: EngineSettings
 ): number | null {
-  const noise = site.noiseRestricted ? 1 + (settings.noiseLabourUplift ?? 0.08) : 1;
-  const multiplier = site.labourMultiplier * noise;
-  const rate = inputs.applicationRateOverride ?? tier?.applicationRatePerSqm ?? null;
-  if (rate === null) return null;
-  return rate * multiplier;
+  if (!anchors?.length || !inputs.tileLengthMm || !inputs.tileWidthMm) return null;
+  const sorted = [...anchors].sort((a, b) => a.areaSqm - b.areaSqm);
+  const area = (inputs.tileLengthMm / 1000) * (inputs.tileWidthMm / 1000);
+  let rate: number;
+  if (area <= sorted[0].areaSqm) rate = sorted[0].labourPerSqm;
+  else if (area >= sorted[sorted.length - 1].areaSqm) rate = sorted[sorted.length - 1].labourPerSqm;
+  else {
+    let lo = sorted[0];
+    let hi = sorted[sorted.length - 1];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (area >= sorted[i].areaSqm && area <= sorted[i + 1].areaSqm) {
+        lo = sorted[i];
+        hi = sorted[i + 1];
+        break;
+      }
+    }
+    rate =
+      lo.labourPerSqm +
+      ((area - lo.areaSqm) / (hi.areaSqm - lo.areaSqm)) * (hi.labourPerSqm - lo.labourPerSqm);
+  }
+  if (inputs.wallInstallation) rate += settings.tilingWallUplift ?? 10;
+  return rate;
+}
+
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Labour suggestion, in order: median of past quote-line labour values for
+// the same stage; else the tile ladder (tiling lines with a tile size); else
+// the application-only rate table; else the labour tier rate. The result is
+// scaled by the site multiplier and, where coats are set, by the coat time
+// factor from the stage's subsequent-coat weight. Never a nudge target.
+export function suggestLabour(args: {
+  stage: StageRef | null;
+  tier: TierRef | null;
+  inputs: LineInputs;
+  site: SiteProfileRef;
+  settings: EngineSettings;
+  tileLabourAnchors?: TileLabourAnchor[];
+  labourHistory?: LabourHistoryPoint[];
+}): { value: number; source: LabourSource } {
+  const { stage, tier, inputs, site, settings } = args;
+  const mult = labourMultiplier(site, settings);
+  const coats = Math.max(1, inputs.coats ?? 1);
+  const coatFactor = 1 + (coats - 1) * (stage?.subsequentCoatFactor ?? 1);
+
+  const past = (args.labourHistory ?? []).filter((h) => h.stageId === stage?.id);
+  if (past.length >= 2) {
+    return { value: median(past.map((p) => p.labourPerUnit)), source: "history median" };
+  }
+
+  const ladder = tileLadderLabour(args.tileLabourAnchors, inputs, settings);
+  if (ladder !== null && stage?.applicationOnly?.tiling) {
+    return { value: ladder * mult, source: "tile ladder" };
+  }
+
+  const listRate = applicationOnlyListRate(stage, inputs);
+  if (listRate !== null) {
+    return { value: listRate * mult * coatFactor, source: "application-only rate" };
+  }
+
+  const tierRate = inputs.applicationRateOverride ?? tier?.applicationRatePerSqm ?? null;
+  if (tierRate !== null) {
+    return { value: tierRate * mult * coatFactor, source: "labour tier" };
+  }
+  return { value: 0, source: "none" };
 }
 
 // Crew cost reference, shown in the line breakdown only, never applied to the

@@ -34,6 +34,8 @@ export interface EngineSettings {
   logisticsTruckCost?: number;
   logisticsTruckCapacityTons?: number;
   logisticsBargePerTon?: number;
+  // Added to the tiling labour suggestion for wall installation (default 10)
+  tilingWallUplift?: number;
 }
 
 export interface FamilyRef {
@@ -121,7 +123,13 @@ export interface LineInputs {
   boughtInCost?: number;
   cuttingWastePct?: number;
   markupPct?: number;
-  // labour
+  // labour (labour model redesign, UPDATE_LABOUR_MODEL.md): labour is an
+  // editable input with an engine suggestion, never a nudge target
+  labourOverride?: number;
+  // absorb labour in margin: zeroes this line's labour, stage stays on quote
+  absorbLabour?: boolean;
+  // tiling: wall installation adds the wall uplift to the labour suggestion
+  wallInstallation?: boolean;
   applicationRateOverride?: number;
   productivityOverride?: number;
   // pricing
@@ -156,10 +164,32 @@ export interface QuoteInput {
   baseProgrammeCrewDays?: number | null;
   marginPct?: number;
   overheadPct?: number;
+  // Head contractor's verbal total labour figure for the whole job. When set,
+  // it distributes across labour-bearing lines pro rata to their suggestions;
+  // per-line labour overrides win over their share. Never a nudge target.
+  labourJobTotal?: number | null;
+}
+
+// Labour per sqm anchors on tile area, floor installation. Interpolate
+// linearly between consecutive anchors; wall installation adds wallUplift.
+export interface TileLabourAnchor {
+  areaSqm: number;
+  labourPerSqm: number;
+  note?: string | null;
+}
+
+// Past labour values from issued quote lines (same stage), the first
+// suggestion source. Distinct from HistoryPoint, which carries full rates.
+export interface LabourHistoryPoint {
+  stageId: string;
+  labourPerUnit: number;
 }
 
 export interface ReferenceData {
   settings: EngineSettings;
+  // Tile labour ladder (admin editable, confidence M) and past labour values
+  tileLabourAnchors?: TileLabourAnchor[];
+  labourHistory?: LabourHistoryPoint[];
   familiesById: Map<string, FamilyRef>;
   tiersById: Map<string, TierRef>;
   stagesById: Map<string, StageRef>;
@@ -181,10 +211,25 @@ export interface Nudge {
   lineId?: string;
 }
 
+export type LabourSource =
+  | "manual"
+  | "job total"
+  | "absorbed"
+  | "history median"
+  | "tile ladder"
+  | "application-only rate"
+  | "labour tier"
+  | "none";
+
 export interface LineBreakdown {
   lineId: string;
   materialPerUnit: number;
+  // Effective labour used in the suggested price: override, job-total share,
+  // zero when absorbed, else the suggestion
   labourPerUnit: number;
+  // The engine suggestion and where it came from, shown greyed beside the input
+  labourSuggestedPerUnit: number;
+  labourSource: LabourSource;
   consumablesPerUnit: number;
   equipmentPerUnit: number;
   // Reference only, never applied to the price
@@ -213,6 +258,10 @@ export interface ProgrammeResult {
 
 export interface QuoteTotals {
   lines: LineBreakdown[];
+  // Sum of line labour suggestions x qty, greyed beside the job-total box
+  labourSuggestedTotal: number;
+  // The head contractor figure, echoed back when set
+  labourJobTotal: number | null;
   floorSubtotal: number;
   calculatedSubtotal: number;
   quotedSubtotal: number;

@@ -331,6 +331,7 @@ export async function updateQuoteVariables(
     programme_hours_per_day?: number | null;
     programme_base_crew_days?: number | null;
     margin_pct?: number | null;
+    labour_job_total?: number | null;
   }
 ): Promise<{ error?: string }> {
   await getProfile();

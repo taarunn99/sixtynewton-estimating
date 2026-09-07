@@ -270,19 +270,64 @@ function LineRow({
           <div className="flex flex-col gap-2 pr-2">
             <div className="flex flex-wrap gap-x-6 gap-y-1 tabular-nums">
               <span>Material {fmtRate(line.breakdown.material)}</span>
-              <span>Labour {fmtRate(line.breakdown.labour)}</span>
               <span>Consumables {fmtRate(line.breakdown.consumables)}</span>
-              <span>Equipment {fmtRate(line.breakdown.equipment)}</span>
-              <span className="font-medium">Cost {fmtRate(line.breakdown.cost)}</span>
-              <span className="text-[#4A6B8A]">Our cost is cost plus overhead</span>
-              {line.breakdown.crewCostReference !== null ? (
+              <span className="text-[#4A6B8A]">Our cost is material plus consumables plus overhead; labour is not in it</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 tabular-nums">
+              <label className="text-[#8A929C]">Labour per {line.unit}</label>
+              {line.labour.absorbed ? (
+                <span className="text-[#8A929C]">labour absorbed</span>
+              ) : (
+                <input
+                  type="number"
+                  key={`lab-${line.labour.effective}`}
+                  defaultValue={Math.round(line.labour.effective * 10) / 10}
+                  disabled={!editable}
+                  onBlur={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n >= 0 && n !== line.labour.effective) {
+                      save({ inputs: { labourOverride: n } });
+                    }
+                  }}
+                  className={`w-20 rounded border px-1.5 py-0.5 text-right font-semibold tabular-nums focus:border-[#C2A05C] focus:outline-none ${
+                    line.labour.overridden
+                      ? "border-[#CFD4DA] bg-white text-[#1F2328]"
+                      : "border-dashed border-[#B9AE99] bg-[#FAF7EF] text-[#5B636E]"
+                  }`}
+                />
+              )}
+              {!line.labour.overridden && !line.labour.absorbed ? (
                 <span className="text-[#8A929C]">
-                  Crew cost reference: {fmtRate(line.breakdown.crewCostReference)} per sqm, never applied to the price
+                  {line.labour.source === "job total" ? "from job total" : "suggested"}
+                  <Info text={line.derivation.labour} />
                 </span>
+              ) : (
+                <span className="text-[#8A929C]">
+                  suggestion {fmtRate(line.labour.suggested)} ({line.labour.source === "manual" ? "edited" : line.labour.source})
+                  <Info text={line.derivation.labour} />
+                </span>
+              )}
+              {line.labour.overridden && editable ? (
+                <button
+                  onClick={() => save({ inputs: { labourOverride: null } })}
+                  className="text-[#8A929C] hover:underline"
+                >
+                  back to suggestion
+                </button>
               ) : null}
             </div>
             {editable ? (
               <div className="flex flex-wrap items-center gap-4">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={line.labour.absorbed}
+                    onChange={(e) => save({ inputs: { absorbLabour: e.target.checked } })}
+                    className="accent-[#1F2328]"
+                  />
+                  Absorb labour in margin
+                  <Info text="Zeroes this line's labour and keeps the stage on the quote. On by default for prep stages when a main application stage of the same discipline is included." />
+                </label>
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input
                     type="checkbox"
@@ -291,8 +336,35 @@ function LineRow({
                     className="accent-[#1F2328]"
                   />
                   Material by client
-                  <Info text="Application only: material cost drops to zero, our cost becomes the crew cost reference, and the suggested price comes from the application-only rate table times the site labour multiplier." />
+                  <Info text="Application only: material cost drops to zero and the suggested price is the labour figure itself; application-only rates already carry margin." />
                 </label>
+                {line.isThicknessDriver ? (
+                  <span className="flex items-center gap-1.5">
+                    <label className="text-[#8A929C]">Thickness mm</label>
+                    <input
+                      type="number"
+                      defaultValue={line.thicknessMm ?? ""}
+                      onBlur={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n > 0) save({ inputs: { thicknessMm: n } });
+                      }}
+                      className="w-16 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                    />
+                    <Info text="Material consumption scales with thickness: kg per sqm per mm times this. An Ultraplan line at 10 mm carries five times the material of 2 mm." />
+                  </span>
+                ) : null}
+                {line.isTiling ? (
+                  <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={line.wallInstallation}
+                      onChange={(e) => save({ inputs: { wallInstallation: e.target.checked } })}
+                      className="accent-[#1F2328]"
+                    />
+                    Wall installation
+                    <Info text="Adds 10 to the tiling labour suggestion; floors use the ladder figure as is." />
+                  </label>
+                ) : null}
                 {line.isTiling ? (
                   <span className="flex items-center gap-1.5">
                     <label className="text-[#8A929C]">Tile size cm</label>
@@ -317,7 +389,7 @@ function LineRow({
                       }}
                       className="w-14 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
                     />
-                    <Info text="Tile width and height in cm. Drives adhesive and grout consumption, and the application-only rate interpolated on tile area between 60x60 at 55 and large slabs at 120." />
+                    <Info text="Tile width and height in cm. Drives adhesive and grout consumption, and the labour ladder interpolated on tile area: 60x60 at 40, 60x120 at 65 (band under confirmation), 120x120 at 90, up to 240x240 at 115." />
                   </span>
                 ) : null}
               </div>
@@ -635,6 +707,29 @@ export function Ledger({
             editable={editable}
             onSave={(n) => saveVar({ margin_pct: n === null ? null : n / 100 })}
           />
+          <div className="flex items-center gap-2 rounded-lg border border-[#C2A05C] bg-[#FAF7EF] px-2.5 py-1.5">
+            <label className="text-[13px] text-[#5B636E]">
+              Total labour for this job
+              <Info text="The head contractor's verbal figure. When set, it spreads across labour-bearing lines pro rata to their suggestions and each line shows labour from job total. Editing a line's labour afterwards overrides its share. No warnings ever fire on this number." />
+            </label>
+            <input
+              type="number"
+              key={`jt-${totals.labourJobTotal ?? "unset"}`}
+              defaultValue={totals.labourJobTotal ?? ""}
+              disabled={!editable}
+              placeholder={fmt(totals.labourSuggestedTotal)}
+              onBlur={(e) => {
+                const n = e.target.value === "" ? null : Number(e.target.value);
+                if ((n === null || Number.isFinite(n)) && n !== totals.labourJobTotal) {
+                  saveVar({ labour_job_total: n });
+                }
+              }}
+              className="w-24 border-b border-[#C2A05C] bg-transparent px-0.5 text-right text-sm font-semibold tabular-nums focus:outline-none"
+            />
+            <span className="text-xs tabular-nums text-[#8A929C]">
+              suggested {fmt(totals.labourSuggestedTotal)}
+            </span>
+          </div>
         </div>
       </div>
 

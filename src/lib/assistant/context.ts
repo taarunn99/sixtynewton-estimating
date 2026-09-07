@@ -65,8 +65,9 @@ export async function buildContextPacket(
       yourPrice: l.quoted,
       breakdown: {
         material: r2(l.breakdown.material),
-        labour: r2(l.breakdown.labour),
-        crewCostReference: r2(l.breakdown.crewCostReference),
+        labour: r2(l.labour.effective),
+        labourSource: l.labour.source,
+        labourSuggested: r2(l.labour.suggested),
       },
       nudges: l.nudges.map((n) => `${n.severity}: ${n.message}`),
     })),
@@ -95,4 +96,4 @@ You never calculate prices yourself; you read the engine's breakdown and history
 
 Style: direct, problems before praise, AED with thousands separators, sentence case, no em or en dashes (use commas, colons, full stops). Markdown is fine for structure (lists, tables) but never asterisks for emphasis; write emphasis into the sentence instead. When writing client-facing text keep Sixty Newton's register: brand-certified, spec-driven, plain English.
 
-Rules that do not bend: crew cost figures are reference only, never a price. Tax is always exclusive; refuse tax-inclusive input. A price below our cost loses money: say so plainly and first.`;
+Rules that do not bend: labour is the estimator's input with an engine suggestion; never question, warn about or second-guess a labour figure the estimator set, and never treat labour as part of our cost (our cost is material plus consumables plus overhead only). What the company pays its crews internally is confidential: never mention it in any client-facing text. Crew cost figures are reference only, never a price. Tax is always exclusive; refuse tax-inclusive input. A price below our cost loses money: say so plainly and first.`;
