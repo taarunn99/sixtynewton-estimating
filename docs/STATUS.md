@@ -50,7 +50,7 @@ Pending in phase 2:
 ## Labour model redesign (2 Sep 2026, docs/UPDATE_LABOUR_MODEL.md)
 
 - Labour is a per-line editable input prefilled with a suggestion (greyed until edited, source named in the (i)): past quote-line labour medians first, then the tile ladder or application-only rate table, then the labour tier. No nudges ever fire on labour.
-- Our cost = material + consumables + overhead only. Labour left the floor. New R1 floors: screed 36, waterproofing 39.5, tile 19.5, grout 18 per sqm (floor subtotal 39,550 before VAT); zero lines below floor, calculated total 322,875 still within 15% of the issued 286,125.
+- Our cost = material + consumables + overhead only. Labour left the floor. New R1 floors: screed 36, waterproofing 39.5, tile 19.5, grout 18 per sqm (floor subtotal 39,550 before VAT); zero lines below floor, calculated total 272,528 including VAT, within 4.8% of the issued 286,125.
 - Absorb labour in margin toggle per line, default on for prep stages (grinding, priming, surface prep; demolition excluded) when a main application stage of the same discipline is included.
 - Total labour for this job box in the variables panel: head contractor figure distributes pro rata to suggestions, lines mark "from job total", later per-line edits override their share.
 - Labour cost reference (admin, Labour reference): salaries, accommodation, visa (flag: monthly or per contract), daily wages, overtime rule, crew reference, and the confidential Al Wathba piece rates (admin only; a test asserts the table is referenced nowhere client-facing).

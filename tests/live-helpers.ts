@@ -42,7 +42,7 @@ export async function loadLiveQuote(
     .eq("revision", revision)
     .single();
 
-  const [{ data: lineRows }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }] =
+  const [{ data: lineRows }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: appRates }, { data: anchorRows }] =
     await Promise.all([
       supabase.from("quote_lines").select("*").eq("quote_id", quote.id).order("sort"),
       supabase.from("settings").select("*").single(),
@@ -54,7 +54,10 @@ export async function loadLiveQuote(
       supabase.from("labour_tiers").select("*"),
       supabase.from("stages").select("*"),
       supabase.from("site_profiles").select("*").eq("id", quote.sites.site_profile_id).single(),
+      supabase.from("application_rates").select("*"),
+      supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm"),
     ]);
+  const appRateById = new Map((appRates ?? []).map((r) => [r.id, r]));
 
   const repIds = (famRows ?? []).map((f) => f.representative_product_id).filter(Boolean);
   const costById = new Map<string, { books_cost: number | null; cost_flag: string }>();
@@ -77,6 +80,7 @@ export async function loadLiveQuote(
     congestionLossPerExtraCrew: Number(settingsRow!.congestion_loss_per_extra_crew),
     baselineProductivityPerCrewDay: num(settingsRow!.baseline_productivity_sqm_per_crew_day) ?? undefined,
     upperFloorFactor: num(settingsRow!.upper_floor_factor) ?? undefined,
+    tilingWallUplift: num(settingsRow!.tiling_wall_uplift) ?? undefined,
   };
 
   const familiesById = new Map<string, FamilyRef>(
@@ -120,20 +124,35 @@ export async function loadLiveQuote(
   );
 
   const stagesById = new Map<string, StageRef>(
-    (stageRows ?? []).map((s) => [
-      s.id,
-      {
-        id: s.id,
-        name: s.name,
-        discipline: s.discipline,
-        cureDays: num(s.cure_days),
-        consumablePerSqm: num(s.consumable_per_sqm),
-        productivity: num(s.default_productivity_sqm_per_crew_day),
-        productivityConfidence: s.productivity_confidence,
-        speedWeight: num(s.speed_weight),
-        subsequentCoatFactor: num(s.subsequent_coat_factor),
-      },
-    ])
+    (stageRows ?? []).map((s) => {
+      const ar = s.application_rate_id ? appRateById.get(s.application_rate_id) : null;
+      return [
+        s.id,
+        {
+          id: s.id,
+          name: s.name,
+          discipline: s.discipline,
+          cureDays: num(s.cure_days),
+          consumablePerSqm: num(s.consumable_per_sqm),
+          productivity: num(s.default_productivity_sqm_per_crew_day),
+          productivityConfidence: s.productivity_confidence,
+          speedWeight: num(s.speed_weight),
+          subsequentCoatFactor: num(s.subsequent_coat_factor),
+          applicationOnly: ar
+            ? ar.anchor_small_area !== null
+              ? {
+                  tiling: {
+                    smallArea: Number(ar.anchor_small_area),
+                    smallRate: Number(ar.anchor_small_rate),
+                    largeArea: Number(ar.anchor_large_area),
+                    largeRate: Number(ar.anchor_large_rate),
+                  },
+                }
+              : { rate: num(ar.rate) }
+            : null,
+        },
+      ];
+    })
   );
 
   const siteProfile: SiteProfileRef = {
@@ -172,5 +191,19 @@ export async function loadLiveQuote(
     overheadPct: num(quote.overhead_pct) ?? undefined,
   };
 
-  return { quoteInput, ref: { settings, familiesById, tiersById, stagesById }, lines };
+  return {
+    quoteInput,
+    ref: {
+      settings,
+      familiesById,
+      tiersById,
+      stagesById,
+      tileLabourAnchors: (anchorRows ?? []).map((a) => ({
+        areaSqm: Number(a.tile_area_sqm),
+        labourPerSqm: Number(a.labour_per_sqm),
+      })),
+      labourHistory: [],
+    },
+    lines,
+  };
 }
