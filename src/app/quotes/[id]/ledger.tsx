@@ -18,7 +18,31 @@ export type StageOption = {
   discipline: string;
   unit: string;
   hasDefaultProduct: boolean;
+  familyName?: string;
 };
+
+// Search aliases so common trade words find their stages ("micro", "loft",
+// "microtopping" must all hit the microtopping stages).
+const SEARCH_ALIASES: Record<string, string> = {
+  Microtopping: "micro microtopping microcement loft ultratop decorative",
+  "Design concrete": "decorative design concrete stamp",
+  Polishing: "polish polished concrete",
+  "SL & screed": "self levelling self-levelling sl screed ultraplan topcem",
+  "Bitumen WP": "bitumen torch membrane awazel roll",
+  Waterproofing: "wp waterproof waterproofing mapelastic purtop cementitious liquid",
+  "Epoxy flooring": "epoxy resin mapefloor coating floor paint",
+  "Tiling & marble": "tile tiling marble porcelain slab adhesive grout",
+  Sealants: "sealant silicone pu joint mastic",
+  Insulation: "insulation xps board thermal",
+  Repair: "repair injection crack spall concrete",
+  "Vinyl flooring": "vinyl lvt sheet flooring",
+  Painting: "paint painting decorative wall",
+  "Cross-discipline": "general prep mobilisation survey",
+};
+
+export function stageSearchText(s: StageOption): string {
+  return `${s.name} ${s.discipline} ${s.familyName ?? ""} ${SEARCH_ALIASES[s.discipline] ?? ""}`.toLowerCase();
+}
 export type FamilyOption = { id: string; name: string; discipline: string; brand: string };
 
 // Product families offered for a stage stay inside that stage's discipline:
@@ -100,9 +124,11 @@ function AddStageDialog({
   const [pending, startTransition] = useTransition();
 
   const pool = discipline ? stages.filter((s) => s.discipline === discipline) : stages;
-  const results = pool.filter((s) =>
-    `${s.name} ${s.discipline}`.toLowerCase().includes(query.toLowerCase())
-  );
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = pool.filter((s) => {
+    const text = stageSearchText(s);
+    return terms.every((t) => text.includes(t));
+  });
 
   const pick = (stage: StageOption) =>
     startTransition(async () => {
@@ -338,11 +364,12 @@ function LineRow({
                   Material by client
                   <Info text="Application only: material cost drops to zero and the suggested price is the labour figure itself; application-only rates already carry margin." />
                 </label>
-                {line.isThicknessDriver ? (
+                {line.isThicknessDriver && line.discipline !== "Microtopping" ? (
                   <span className="flex items-center gap-1.5">
                     <label className="text-[#8A929C]">Thickness mm</label>
                     <input
                       type="number"
+                      step="any"
                       defaultValue={line.thicknessMm ?? ""}
                       onBlur={(e) => {
                         const n = Number(e.target.value);
@@ -350,9 +377,50 @@ function LineRow({
                       }}
                       className="w-16 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
                     />
-                    <Info text="Material consumption scales with thickness: kg per sqm per mm times this. An Ultraplan line at 10 mm carries five times the material of 2 mm." />
+                    {line.thicknessMm !== null && line.thicknessMm > 50 ? (
+                      <span className="text-[#B8741A]">unusually thick, check the TDS</span>
+                    ) : null}
+                    <Info text="Free entry, decimals allowed. Material consumption scales with thickness: kg per sqm per mm times this. An Ultraplan line at 10 mm carries five times the material of 2 mm." />
                   </span>
                 ) : null}
+                {line.discipline === "Microtopping" ? (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <label className="text-[#8A929C]">Base mm</label>
+                    <input type="number" step="any" defaultValue={line.baseCoatMm ?? ""} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n) && n > 0) save({ inputs: { baseCoatMm: n } }); }} className="w-14 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none" />
+                    <label className="text-[#8A929C]">x coats</label>
+                    <input type="number" defaultValue={line.baseCoats ?? ""} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n) && n > 0) save({ inputs: { baseCoats: n } }); }} className="w-11 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none" />
+                    <label className="text-[#8A929C]">Finish mm</label>
+                    <input type="number" step="any" defaultValue={line.finishCoatMm ?? ""} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 0) save({ inputs: { finishCoatMm: n } }); }} className="w-14 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none" />
+                    <label className="text-[#8A929C]">Sealer coats</label>
+                    <input type="number" defaultValue={line.sealerCoats ?? ""} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 0) save({ inputs: { sealerCoats: n } }); }} className="w-11 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none" />
+                    <Info text="Microtopping build-up: total thickness = base mm x base coats + finish mm; the coat count also scales the labour suggestion. All free entry." />
+                  </span>
+                ) : null}
+                <span className="flex items-center gap-1.5">
+                  <label className="text-[#8A929C]">Coats</label>
+                  <input
+                    type="number"
+                    defaultValue={line.coats ?? ""}
+                    placeholder="1"
+                    onBlur={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n) && n > 0) save({ inputs: { coats: n } });
+                    }}
+                    className="w-11 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                  />
+                  <label className="text-[#8A929C]">Waste %</label>
+                  <input
+                    type="number"
+                    step="any"
+                    defaultValue={line.wastePct !== null ? line.wastePct * 100 : ""}
+                    placeholder="5"
+                    onBlur={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n) && n >= 0) save({ inputs: { wastePct: n / 100 } });
+                    }}
+                    className="w-12 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                  />
+                </span>
                 {line.isTiling ? (
                   <label className="flex cursor-pointer items-center gap-1.5">
                     <input
@@ -435,6 +503,151 @@ function LineRow({
         </div>
       ) : null}
     </>
+  );
+}
+
+function adjustmentAmount(
+  adjustments: { name: string; amount: number }[],
+  name: string
+): number {
+  return adjustments.find((a) => a.name === name)?.amount ?? 0;
+}
+
+function AddVariable({
+  onAdd,
+}: {
+  onAdd: (cv: { name: string; kind: string; value: number }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState("fixed");
+  const [value, setValue] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-dashed border-[#B9AE99] px-2.5 py-1.5 text-[13px] text-[#8A929C] hover:border-[#5B636E]"
+      >
+        + Add variable
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 rounded-lg border border-[#C2A05C] bg-white px-2.5 py-1.5 text-[13px]">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name"
+        className="w-28 border-b border-[#CFD4DA] bg-transparent focus:border-[#C2A05C] focus:outline-none"
+      />
+      <select
+        value={kind}
+        onChange={(e) => setKind(e.target.value)}
+        className="rounded border border-[#CFD4DA] bg-white px-1 py-0.5 text-xs"
+      >
+        <option value="pct_labour">% of labour subtotal</option>
+        <option value="pct_quote">% of quote subtotal</option>
+        <option value="fixed">fixed amount</option>
+        <option value="per_day">amount per calendar day</option>
+      </select>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Value"
+        className="w-16 border-b border-[#CFD4DA] bg-transparent text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+      />
+      <button
+        onClick={() => {
+          const n = Number(value);
+          if (name.trim() && Number.isFinite(n)) {
+            onAdd({ name: name.trim(), kind, value: n });
+            setOpen(false);
+            setName("");
+            setValue("");
+          }
+        }}
+        className="rounded bg-[#1F2328] px-2 py-0.5 text-xs text-white"
+      >
+        Add
+      </button>
+      <button onClick={() => setOpen(false)} className="text-xs text-[#8A929C]">
+        Cancel
+      </button>
+    </span>
+  );
+}
+
+function CashStrip({
+  totals,
+  paymentSplit,
+  editable,
+  onSaveSplit,
+}: {
+  totals: LedgerResult["totals"];
+  paymentSplit: number[];
+  editable: boolean;
+  onSaveSplit: (split: number[]) => void;
+}) {
+  const [split, setSplit] = useState(paymentSplit.join("/"));
+  useEffect(() => setSplit(paymentSplit.join("/")), [paymentSplit]);
+  const parts = paymentSplit;
+  const sum = parts.reduce((s, p) => s + p, 0);
+  const totalIncVat = totals.totalQuoted;
+  const material = totals.materialSubtotal;
+  const advance = ((parts[0] ?? 0) / 100) * totalIncVat;
+  const covered = advance >= material;
+  const pctOfQuote = totals.quotedSubtotal > 0 ? (material / totals.quotedSubtotal) * 100 : 0;
+  const cf = totals.collectionFactor;
+  const names = ["Advance", "Interim", "Final", "Milestone 4", "Milestone 5"];
+
+  return (
+    <div className="mx-7 mb-6 rounded-lg border border-[#B9AE99] bg-[#FAF7EF] px-4 py-3 text-[13px]">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h3 className="font-semibold">
+          Internal <span className="font-normal text-[#8A929C]">cash estimate, never on the PDF</span>
+        </h3>
+        <span className="flex items-center gap-2">
+          <label className="text-xs text-[#8A929C]">Payment terms</label>
+          <input
+            value={split}
+            disabled={!editable}
+            onChange={(e) => setSplit(e.target.value)}
+            onBlur={() => {
+              const nums = split.split("/").map((s) => Number(s.trim()));
+              if (nums.every((n) => Number.isFinite(n) && n >= 0) && nums.reduce((a, b) => a + b, 0) === 100) {
+                onSaveSplit(nums);
+              } else {
+                setSplit(paymentSplit.join("/"));
+              }
+            }}
+            className="w-24 rounded border border-[#CFD4DA] bg-white px-1.5 py-0.5 text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+          />
+          <button onClick={() => onSaveSplit([50, 40, 10])} disabled={!editable} className="text-xs text-[#8A929C] hover:underline">50/40/10</button>
+          <button onClick={() => onSaveSplit([60, 30, 10])} disabled={!editable} className="text-xs text-[#8A929C] hover:underline">60/30/10</button>
+        </span>
+      </div>
+      {sum !== 100 ? <p className="mb-1 text-xs text-[#A83232]">Percentages must sum to 100.</p> : null}
+      <div className="flex flex-wrap gap-x-6 gap-y-1 tabular-nums">
+        {parts.map((p, i) => (
+          <span key={i}>
+            {names[i] ?? `Milestone ${i + 1}`} {p}%: <b>{fmt((p / 100) * totalIncVat)}</b>
+          </span>
+        ))}
+        <span className="text-[#5B636E]">on your price total {fmt(totalIncVat)} including VAT</span>
+      </div>
+      <p className="mt-1.5 tabular-nums">
+        Material cost {fmt(material)}. Material is {pctOfQuote.toFixed(0)}% of the quote. Advance covers material:{" "}
+        {covered ? "yes" : `no, short by ${fmt(material - advance)} AED`}.
+      </p>
+      {cf < 1 ? (
+        <p className="mt-1 tabular-nums text-[#5B636E]">
+          At {Math.round(cf * 100)}% collection:{" "}
+          {parts.map((p, i) => `${names[i] ?? `M${i + 1}`} ${fmt((p / 100) * totalIncVat * cf)}`).join(", ")}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -694,12 +907,16 @@ export function Ledger({
       <div className="mx-7 mt-4 rounded-lg border border-dashed border-[#CFD4DA] px-4 py-3">
         <h3 className="mb-2 flex justify-between text-[13px] font-semibold">
           Variables on this quote
-          <span className="font-normal text-[#8A929C]">each one changes the calculated column</span>
+          <span className="font-normal text-[#8A929C]">each shows its live effect in AED and lands as a named row in totals</span>
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VarInput label="Site hours per day" value={quote.programmeHoursPerDay} editable={editable} onSave={(n) => saveVar({ programme_hours_per_day: n })} />
           <VarInput label="Deadline, calendar days" value={quote.programmeDaysRequested} editable={editable} onSave={(n) => saveVar({ programme_days_requested: n })} />
+          <VarInput label="Working days per week" value={quote.programmeDaysPerWeek} editable={editable} onSave={(n) => saveVar({ programme_days_per_week: n })} />
           <VarInput label="Base programme, crew-days" value={quote.programmeBaseCrewDays} editable={editable} onSave={(n) => saveVar({ programme_base_crew_days: n })} />
+          <span className="text-xs tabular-nums text-[#5B636E]">
+            Programme: {totals.programmeUplift > 0 ? `+${fmt(totals.programmeUplift)}` : "no effect"}
+          </span>
           <VarInput
             label="Margin"
             value={Math.round(quote.marginPct * 100)}
@@ -707,6 +924,75 @@ export function Ledger({
             editable={editable}
             onSave={(n) => saveVar({ margin_pct: n === null ? null : n / 100 })}
           />
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#CFD4DA] bg-white px-2.5 py-1.5 text-[13px] text-[#5B636E]">
+            <input
+              type="checkbox"
+              checked={quote.occupiedBuilding}
+              disabled={!editable}
+              onChange={(e) => saveVar({ occupied_building: e.target.checked })}
+              className="accent-[#1F2328]"
+            />
+            Occupied building
+            <span className="text-xs tabular-nums text-[#96772B]">
+              {quote.occupiedBuilding
+                ? `+${fmt(adjustmentAmount(totals.adjustments, "Occupied building"))}`
+                : ""}
+            </span>
+            <Info text="Productivity factor 0.85 (admin editable): labour suggestions rise by about 18%. Labour you typed is untouched. Confidence L, source Tarun Sep 2026." />
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#CFD4DA] bg-white px-2.5 py-1.5 text-[13px] text-[#5B636E]">
+            <input
+              type="checkbox"
+              checked={quote.nightWorkPct !== null}
+              disabled={!editable}
+              onChange={(e) => saveVar({ night_work_pct: e.target.checked ? 10 : null })}
+              className="accent-[#1F2328]"
+            />
+            Night work
+            {quote.nightWorkPct !== null ? (
+              <>
+                <input
+                  type="number"
+                  key={`nw-${quote.nightWorkPct}`}
+                  defaultValue={quote.nightWorkPct}
+                  disabled={!editable}
+                  onBlur={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n !== quote.nightWorkPct) saveVar({ night_work_pct: n });
+                  }}
+                  className="w-12 border-b border-[#CFD4DA] bg-transparent text-right tabular-nums focus:border-[#C2A05C] focus:outline-none"
+                />
+                <span>%</span>
+                <span className="text-xs tabular-nums text-[#96772B]">
+                  +{fmt(adjustmentAmount(totals.adjustments, "Night work"))}
+                </span>
+              </>
+            ) : null}
+            <Info text="Percent on the labour subtotal, prefilled +10%, editable. Computed from labour as entered, including values you typed." />
+          </label>
+          {quote.customVariables.map((cv, i) => (
+            <span key={i} className="flex items-center gap-1.5 rounded-lg border border-[#CFD4DA] bg-white px-2.5 py-1.5 text-[13px] text-[#5B636E]">
+              {cv.name}
+              <span className="text-xs tabular-nums text-[#96772B]">
+                +{fmt(adjustmentAmount(totals.adjustments, cv.name))}
+              </span>
+              {editable ? (
+                <button
+                  onClick={() =>
+                    saveVar({ custom_variables: quote.customVariables.filter((_, j) => j !== i) })
+                  }
+                  className="text-[#A83232]"
+                >
+                  x
+                </button>
+              ) : null}
+            </span>
+          ))}
+          {editable ? (
+            <AddVariable
+              onAdd={(cv) => saveVar({ custom_variables: [...quote.customVariables, cv] })}
+            />
+          ) : null}
           <div className="flex items-center gap-2 rounded-lg border border-[#C2A05C] bg-[#FAF7EF] px-2.5 py-1.5">
             <label className="text-[13px] text-[#5B636E]">
               Total labour for this job
@@ -741,19 +1027,20 @@ export function Ledger({
           <span className="text-right text-sm font-medium tabular-nums text-[#D8B96A]">{fmt(totals.quotedSubtotal)}</span>
           <span />
         </div>
-        {totals.programmeUplift > 0 || totals.programmeInfeasible ? (
-          <>
-            <div className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
-              <span className="text-sm text-[#B9AE99]">Programme compression</span>
-              <span className="text-right text-sm font-medium tabular-nums text-[#8FB2D1]">{fmt(totals.programmeUplift)}</span>
-              <span className="text-right text-sm font-medium tabular-nums text-[#F4EEDE]">{fmt(totals.programmeUplift)}</span>
-              <span className="text-right text-sm tabular-nums text-[#9A8E77]">in rates</span>
-              <span />
-            </div>
-            <p className={`py-0.5 text-xs ${totals.programmeInfeasible ? "text-[#E58A8A]" : "text-[#9A8E77]"}`}>
-              {totals.programmeExplanation}
-            </p>
-          </>
+        {totals.adjustments.map((a) => (
+          <div key={a.name} className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
+            <span className="text-sm text-[#B9AE99]">
+              {a.name}
+              <span title={a.explanation} className="ml-1 inline-grid h-[13px] w-[13px] cursor-help place-items-center rounded-full border border-[#9A8E77] align-[1px] text-[9px] leading-none text-[#9A8E77]">i</span>
+            </span>
+            <span className="text-right text-sm tabular-nums text-[#9A8E77]">{a.mode === "in rates" ? "" : "."}</span>
+            <span className="text-right text-sm font-medium tabular-nums text-[#F4EEDE]">+{fmt(a.amount)}</span>
+            <span className="text-right text-sm tabular-nums text-[#9A8E77]">{a.mode}</span>
+            <span />
+          </div>
+        ))}
+        {totals.programmeInfeasible ? (
+          <p className="py-0.5 text-xs text-[#E58A8A]">{totals.programmeExplanation}</p>
         ) : null}
         <div className="grid grid-cols-[1fr_92px_92px_92px_26px] items-baseline gap-2 py-1">
           <span className="text-sm text-[#B9AE99]">VAT 5%</span>
@@ -775,6 +1062,13 @@ export function Ledger({
           {overFloorPct.toFixed(1)}% over our cost.
         </p>
       </div>
+
+      <CashStrip
+        totals={totals}
+        paymentSplit={quote.paymentSplit}
+        editable={editable}
+        onSaveSplit={(split) => saveVar({ payment_split: split })}
+      />
 
       <div className="mx-7 mb-6 border-t border-[#E2E5E9] pt-3.5">
         <h3 className="mb-2 font-serif text-[15px]">Before and after on this quote</h3>

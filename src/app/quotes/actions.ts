@@ -330,8 +330,13 @@ export async function updateQuoteVariables(
     programme_days_requested?: number | null;
     programme_hours_per_day?: number | null;
     programme_base_crew_days?: number | null;
+    programme_days_per_week?: number | null;
     margin_pct?: number | null;
     labour_job_total?: number | null;
+    occupied_building?: boolean;
+    night_work_pct?: number | null;
+    custom_variables?: { name: string; kind: string; value: number }[];
+    payment_split?: number[];
   }
 ): Promise<{ error?: string }> {
   await getProfile();

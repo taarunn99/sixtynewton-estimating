@@ -4,6 +4,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createServiceClient } from "@/lib/supabase/server";
 import { computeLedger } from "@/lib/engine-server";
+import { composeLabourProposal, searchHistory } from "@/lib/assistant/history";
 
 export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
@@ -29,7 +30,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: "update_line",
     description:
-      "Update a line: qty, quoted rate (null clears it), included, family_id, upper_floor_or_roof.",
+      "Update a line: qty, quoted rate (null clears it), included, family_id, upper_floor_or_roof, labour (per-unit labour the user accepted; writes the override marked as assistant proposed, accepted by user).",
     input_schema: {
       type: "object",
       properties: {
@@ -39,6 +40,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         included: { type: "boolean" },
         family_id: { type: ["string", "null"] },
         upper_floor_or_roof: { type: "boolean" },
+        labour: { type: "number" },
       },
       required: ["line_id"],
       additionalProperties: false,
@@ -74,6 +76,33 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       type: "object",
       properties: { site_profile: { type: "string", description: "Profile id or exact name" } },
       required: ["site_profile"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "search_history",
+    description:
+      "Search everything we have quoted before, imported and issued, by free text (client, site, stage, product words), unit and date range. Returns quote number, date, client, line, rate, unit and quantity notes. Compose pricing answers from these results only, never from memory.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free text, e.g. 'azizi bitumen' or 'white pearl screed'" },
+        unit: { type: "string", enum: ["sqm", "lm", "nos", "lump"] },
+        from: { type: "string", description: "ISO date lower bound" },
+        to: { type: "string", description: "ISO date upper bound" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_labour",
+    description:
+      "Get the engine's labour suggestion for one line with its sources: history median with the matching quotes listed, ladder or tier fallback, and the crew cost reference, plus a one-paragraph recommendation. Never apply it yourself; only after the user accepts, write it with update_line's labour field.",
+    input_schema: {
+      type: "object",
+      properties: { line_id: { type: "string" } },
+      required: ["line_id"],
       additionalProperties: false,
     },
   },
@@ -202,6 +231,13 @@ export async function executeTool(
       if (input.upper_floor_or_roof !== undefined) {
         row.inputs = { ...(line.inputs ?? {}), upperFloorOrRoof: input.upper_floor_or_roof };
       }
+      if (typeof input.labour === "number") {
+        row.inputs = {
+          ...((row.inputs as Record<string, unknown>) ?? line.inputs ?? {}),
+          labourOverride: input.labour,
+          labourNote: "assistant proposed, accepted by user",
+        };
+      }
       const { error } = await supabase.from("quote_lines").update(row).eq("id", line.id);
       if (error) return { error: error.message };
       return { ok: true, ...(await totalsSummary(quoteId)) };
@@ -263,6 +299,45 @@ export async function executeTool(
         .eq("id", quote!.site_id);
       if (error) return { error: error.message };
       return { ok: true, profile: profile.name, ...(await totalsSummary(quoteId)) };
+    }
+
+    case "search_history": {
+      const results = await searchHistory(supabase, {
+        query: input.query as string | undefined,
+        unit: input.unit as string | undefined,
+        from: input.from as string | undefined,
+        to: input.to as string | undefined,
+        limit: input.limit as number | undefined,
+      });
+      return { results };
+    }
+
+    case "propose_labour": {
+      const ledger = await computeLedger(quoteId);
+      if (!ledger) return { error: "Quote not found" };
+      const line = ledger.lines.find((l) => l.id === String(input.line_id));
+      if (!line) return { error: "Line not found on this quote" };
+      const proposal = composeLabourProposal({
+        description: line.description,
+        unit: line.unit,
+        labourSuggested: line.labour.suggested,
+        labourSource: line.labour.source,
+        labourCurrent: line.labour.effective,
+        historyQuotes: line.priceHistory?.quotes ?? [],
+        historyMedian: line.priceHistory?.median ?? null,
+        enginePrice: line.calculated,
+      });
+      return {
+        suggestion: line.labour.suggested,
+        source: line.labour.source,
+        current: line.labour.effective,
+        historyQuotes: line.priceHistory?.quotes ?? [],
+        historyMedian: line.priceHistory?.median ?? null,
+        crewReference: "5 person crew about 480 to 530 per day, near 19 to 21 per sqm at 25 sqm a day",
+        recommendation: proposal,
+        howToApply:
+          "Only after the user explicitly accepts, call update_line with labour set to the accepted figure.",
+      };
     }
 
     case "lookup_history": {

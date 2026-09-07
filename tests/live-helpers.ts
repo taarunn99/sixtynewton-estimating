@@ -6,6 +6,7 @@ import { config } from "dotenv";
 import type {
   EngineSettings,
   FamilyRef,
+  HistoryPoint,
   LineInput,
   QuoteInput,
   ReferenceData,
@@ -33,7 +34,12 @@ export async function loadLiveQuote(
   quoteNumber: string,
   revision: number,
   overrides: { includeAll?: boolean } = {}
-): Promise<{ quoteInput: QuoteInput; ref: ReferenceData; lines: LineInput[] }> {
+): Promise<{
+  quoteInput: QuoteInput;
+  ref: ReferenceData;
+  lines: LineInput[];
+  history: HistoryPoint[];
+}> {
   const supabase = liveClient();
   const { data: quote } = await supabase
     .from("quotes")
@@ -42,7 +48,7 @@ export async function loadLiveQuote(
     .eq("revision", revision)
     .single();
 
-  const [{ data: lineRows }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: appRates }, { data: anchorRows }] =
+  const [{ data: lineRows }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: appRates }, { data: anchorRows }, { data: importedRates }] =
     await Promise.all([
       supabase.from("quote_lines").select("*").eq("quote_id", quote.id).order("sort"),
       supabase.from("settings").select("*").single(),
@@ -56,6 +62,10 @@ export async function loadLiveQuote(
       supabase.from("site_profiles").select("*").eq("id", quote.sites.site_profile_id).single(),
       supabase.from("application_rates").select("*"),
       supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm"),
+      supabase
+        .from("imported_quotes")
+        .select("stage_id, family_id, rate, unit, quote_number, quote_date_text, notes")
+        .not("rate", "is", null),
     ]);
   const appRateById = new Map((appRates ?? []).map((r) => [r.id, r]));
 
@@ -205,5 +215,14 @@ export async function loadLiveQuote(
       labourHistory: [],
     },
     lines,
+    history: (importedRates ?? []).map((r) => ({
+      stageId: r.stage_id,
+      familyId: r.family_id,
+      unitPrice: Number(r.rate),
+      quoteNumber: r.quote_number ?? "",
+      quoteDate: r.quote_date_text ?? "",
+      unit: r.unit ?? null,
+      applicationOnly: /application only/i.test(r.notes ?? ""),
+    })),
   };
 }

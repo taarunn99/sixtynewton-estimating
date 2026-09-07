@@ -1,5 +1,6 @@
 // Assembles per-line breakdowns and quote totals. Spec sections 4 and 5.
 import type {
+  AdjustmentRow,
   HistoryPoint,
   LineBreakdown,
   LineInput,
@@ -42,6 +43,61 @@ function absorbByDefault(line: LineInput, quote: QuoteInput, ref: ReferenceData)
   });
 }
 
+// Occupied building scales labour suggestions by 1 / productivity factor
+export function suggestionScale(quote: QuoteInput, settings: ReferenceData["settings"]): number {
+  return quote.occupiedBuilding ? 1 / (settings.occupiedProductivityFactor ?? 0.85) : 1;
+}
+
+// Microtopping lines describe their build-up (base coat mm x coats, finish
+// coat mm, sealer coats); the engine translates that to thickness and coats.
+export function effectiveInputs(inputs: LineInput["inputs"]): LineInput["inputs"] {
+  if (
+    inputs.baseCoatMm === undefined &&
+    inputs.baseCoats === undefined &&
+    inputs.finishCoatMm === undefined &&
+    inputs.sealerCoats === undefined
+  ) {
+    return inputs;
+  }
+  const baseCoats = inputs.baseCoats ?? 1;
+  const thickness = (inputs.baseCoatMm ?? 0) * baseCoats + (inputs.finishCoatMm ?? 0);
+  const coats = baseCoats + (inputs.finishCoatMm ? 1 : 0) + (inputs.sealerCoats ?? 0);
+  return {
+    ...inputs,
+    thicknessMm: thickness > 0 ? thickness : inputs.thicknessMm,
+    coats,
+  };
+}
+
+// History matching for the suggested price (section 6): same stage and family
+// first, then same stage, then same discipline; unit must agree where known;
+// application-only lines match only application-only history.
+export function matchHistory(
+  line: LineInput,
+  ref: ReferenceData,
+  history: HistoryPoint[]
+): { matches: HistoryPoint[]; level: "stage and family" | "stage" | "discipline" } | null {
+  const stage = line.stageId ? ref.stagesById.get(line.stageId) : null;
+  if (!stage) return null;
+  const appOnly = !!line.inputs.materialByClient;
+  const pool = history.filter((h) => {
+    if (h.unit && h.unit !== line.unit) return false;
+    return appOnly ? h.applicationOnly === true : !h.applicationOnly;
+  });
+  const byFamily = pool.filter(
+    (h) => h.stageId === stage.id && line.familyId && h.familyId === line.familyId
+  );
+  if (byFamily.length >= 2) return { matches: byFamily, level: "stage and family" };
+  const byStage = pool.filter((h) => h.stageId === stage.id);
+  if (byStage.length >= 2) return { matches: byStage, level: "stage" };
+  const byDiscipline = pool.filter((h) => {
+    const hStage = h.stageId ? ref.stagesById.get(h.stageId) : null;
+    return hStage?.discipline === stage.discipline;
+  });
+  if (byDiscipline.length >= 2) return { matches: byDiscipline, level: "discipline" };
+  return null;
+}
+
 export function computeLine(
   line: LineInput,
   quote: QuoteInput,
@@ -54,17 +110,18 @@ export function computeLine(
   const family = line.familyId ? (ref.familiesById.get(line.familyId) ?? null) : null;
   const stage = line.stageId ? (ref.stagesById.get(line.stageId) ?? null) : null;
   const tier = line.tierId ? (ref.tiersById.get(line.tierId) ?? null) : null;
-  const secondaries = (line.inputs.secondaryFamilyIds ?? [])
+  const inputs = effectiveInputs(line.inputs);
+  const secondaries = (inputs.secondaryFamilyIds ?? [])
     .map((id) => ref.familiesById.get(id))
     .filter((f): f is NonNullable<typeof f> => !!f);
 
   const nudges: Nudge[] = [];
   const isLump = line.unit === "lump";
-  const applicationOnly = !!line.inputs.materialByClient;
+  const applicationOnly = !!inputs.materialByClient;
 
   const material = applicationOnly
     ? { value: 0, missing: [] as string[] }
-    : totalMaterialPerUnit(family, secondaries, line.inputs, settings);
+    : totalMaterialPerUnit(family, secondaries, inputs, settings);
   for (const name of material.missing) {
     nudges.push({
       rule: "missing_cost",
@@ -81,30 +138,35 @@ export function computeLine(
     stage?.speedWeight ?? null,
     settings
   );
-  const consumables = stage?.consumablePerSqm ?? 0;
+  // Consumables are covered inside the application rate (about 25 per
+  // crew-day) and equipment is owned: neither enters the quote maths.
+  const consumables = 0;
   const equipment = 0;
 
   // Labour is an input with a suggestion, never a nudge target. Resolution:
   // absorbed (explicit, or default on prep stages when a main application
   // stage of the same discipline is included) -> manual override -> share of
   // the quote-level job total -> the engine suggestion.
-  const suggestion = suggestLabour({
+  const scale = suggestionScale(quote, settings);
+  const rawSuggestion = suggestLabour({
     stage,
     tier,
-    inputs: line.inputs,
+    inputs,
     site: quote.siteProfile,
     settings,
     tileLabourAnchors: ref.tileLabourAnchors,
     labourHistory: ref.labourHistory,
   });
-  const absorbed = line.inputs.absorbLabour ?? absorbByDefault(line, quote, ref);
+  // Occupied building scales the suggestion only; typed labour is untouched
+  const suggestion = { ...rawSuggestion, value: rawSuggestion.value * scale };
+  const absorbed = inputs.absorbLabour ?? absorbByDefault(line, quote, ref);
   let labour: number;
   let labourSource: LineBreakdown["labourSource"];
   if (absorbed) {
     labour = 0;
     labourSource = "absorbed";
-  } else if (typeof line.inputs.labourOverride === "number") {
-    labour = line.inputs.labourOverride;
+  } else if (typeof inputs.labourOverride === "number") {
+    labour = inputs.labourOverride;
     labourSource = "manual";
   } else if (jobTotalSharePerUnit !== null) {
     labour = jobTotalSharePerUnit;
@@ -115,33 +177,58 @@ export function computeLine(
   }
 
   const overhead = quote.overheadPct ?? settings.defaultOverhead;
-  const margin = line.inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
+  const margin = inputs.marginOverride ?? quote.marginPct ?? settings.defaultMargin;
   const quotedEarly = line.quotedRate ?? null;
 
-  // Our cost never includes labour (UPDATE_LABOUR_MODEL.md section 1):
-  // material + consumables + equipment, plus overhead.
-  const floorBase = material.value + consumables + equipment;
+  // Our cost is material plus overhead. Labour never enters it, and
+  // consumables (about 25 per crew-day) are covered inside the application
+  // rate (UPDATE_VARIABLES_CASH.md section 4).
+  const floorBase = material.value + equipment;
   const { floor } = priceFromCost(floorBase, overhead, margin);
   const floorRounded = isLump ? Math.round(floor) : Math.round(floor * 2) / 2;
 
-  const costPerUnit = material.value + labour + consumables + equipment;
-  let calculated: number;
+  const costPerUnit = material.value + labour + equipment;
+  let engineCalculated: number;
   if (applicationOnly) {
     // Client supplies material: the suggested price is the labour figure
     // itself; application-only list rates already carry margin.
-    const sited = line.inputs.upperFloorOrRoof ? labour * upperFloorFactor(settings) : labour;
-    calculated = roundRate(sited, isLump);
+    const sited = inputs.upperFloorOrRoof ? labour * upperFloorFactor(settings) : labour;
+    engineCalculated = roundRate(sited, isLump);
   } else {
     const { price } = priceFromCost(costPerUnit, overhead, margin);
-    const sited = line.inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
+    const sited = inputs.upperFloorOrRoof ? price * upperFloorFactor(settings) : price;
     const modelCalculated = roundRate(sited, isLump);
     // Manual lump lines (scaffolding, garbage, demolition priced as a lump):
     // when the engine has no usable cost basis the model price rounds to zero,
     // so the quoted amount passes through as the suggested price instead of
     // dragging the calculated total to nothing the engine never meant.
-    calculated =
+    engineCalculated =
       isLump && quotedEarly !== null && modelCalculated === 0 ? quotedEarly : modelCalculated;
   }
+
+  // Suggested price both ways (section 6): history median of matching
+  // accepted quote lines leads when at least 2 matches exist; the engine
+  // build-up otherwise. Both figures are always reported. Lumps stay on the
+  // engine side: lump amounts are job-specific and medians mislead.
+  const historyMatch = isLump ? null : matchHistory(line, ref, history);
+  const approximate = !!(inputs.tileLengthMm || inputs.thicknessMm);
+  const priceHistory = historyMatch
+    ? {
+        median: median(historyMatch.matches.map((m) => m.unitPrice)),
+        count: historyMatch.matches.length,
+        matchLevel: historyMatch.level,
+        approximate,
+        quotes: historyMatch.matches
+          .slice(0, 4)
+          .map((m) => ({ quoteNumber: m.quoteNumber, rate: m.unitPrice, date: m.quoteDate })),
+      }
+    : null;
+  const useHistory = priceHistory !== null && priceHistory.count >= 2;
+  const calculated = useHistory ? roundRate(priceHistory.median, isLump) : engineCalculated;
+  const priceDiverges =
+    priceHistory !== null &&
+    engineCalculated > 0 &&
+    Math.abs(priceHistory.median - engineCalculated) / engineCalculated > 0.25;
 
   const quoted = line.quotedRate ?? null;
   const qtyForTotals = line.isRateOnly ? 0 : line.qty;
@@ -207,6 +294,10 @@ export function computeLine(
     labourPerUnit: labour,
     labourSuggestedPerUnit: suggestion.value,
     labourSource,
+    priceHistory,
+    priceEngine: engineCalculated,
+    priceSourceUsed: useHistory ? ("history" as const) : ("engine" as const),
+    priceDiverges,
     consumablesPerUnit: consumables,
     equipmentPerUnit: equipment,
     crewCostReferencePerUnit: crewReference,
@@ -248,6 +339,7 @@ export function computeQuote(
   // rata to their suggestions; per-line overrides keep their own value. A
   // line is labour-bearing when included, not rate-only, not absorbed, and
   // its suggestion is above zero.
+  const scale = suggestionScale(quote, ref.settings);
   const suggestions = new Map<string, number>();
   let suggestionWeight = 0;
   for (const l of quote.lines) {
@@ -256,12 +348,13 @@ export function computeQuote(
     const s = suggestLabour({
       stage,
       tier,
-      inputs: l.inputs,
+      inputs: effectiveInputs(l.inputs),
       site: quote.siteProfile,
       settings: ref.settings,
       tileLabourAnchors: ref.tileLabourAnchors,
       labourHistory: ref.labourHistory,
     });
+    s.value *= scale;
     suggestions.set(l.id, s.value);
     const absorbed = l.inputs.absorbLabour ?? absorbByDefault(l, quote, ref);
     if (l.included && !l.isRateOnly && !absorbed && s.value > 0) {
@@ -304,7 +397,10 @@ export function computeQuote(
     mobilisationPerCrew:
       quote.siteProfile.transportPerTrip * quote.siteProfile.mobilisationMultiplier,
     site: quote.siteProfile,
-    settings: ref.settings,
+    settings: {
+      ...ref.settings,
+      workingDaysPerWeek: quote.programmeDaysPerWeek ?? ref.settings.workingDaysPerWeek,
+    },
   });
 
   const nudges: Nudge[] = lines.flatMap((b) => b.nudges);
@@ -320,8 +416,6 @@ export function computeQuote(
   }
 
   const vatRate = ref.settings.vatRate;
-  const calcWithProgramme = calculatedSubtotal + programme.upliftTotal;
-  const floorWithProgramme = floorSubtotal + programme.upliftTotal;
 
   const labourSuggestedTotal = quote.lines.reduce((s, l) => {
     const absorbed = l.inputs.absorbLabour ?? absorbByDefault(l, quote, ref);
@@ -329,10 +423,78 @@ export function computeQuote(
     return s + (suggestions.get(l.id) ?? 0) * l.qty;
   }, 0);
 
+  // Named adjustment rows from the working variables (section 1). "in rates"
+  // rows are already inside line prices; "added" rows go on top of the
+  // calculated subtotal. None of them ever nudges, and none reaches the PDF.
+  const adjustments: AdjustmentRow[] = [];
+  if (programme.applied && (programme.upliftTotal > 0 || programme.infeasible)) {
+    adjustments.push({
+      name: "Programme compression",
+      amount: programme.upliftTotal,
+      mode: "added",
+      explanation: programme.explanation,
+    });
+  }
+  if (quote.occupiedBuilding) {
+    const factor = ref.settings.occupiedProductivityFactor ?? 0.85;
+    const affected = lines.reduce((s, b, i) => {
+      const l = quote.lines[i];
+      const usedSuggestion = !["manual", "absorbed", "job total"].includes(b.labourSource);
+      if (!l.included || l.isRateOnly || !usedSuggestion) return s;
+      return s + b.labourSuggestedPerUnit * (1 - factor) * l.qty;
+    }, 0);
+    adjustments.push({
+      name: "Occupied building",
+      amount: affected,
+      mode: "in rates",
+      explanation: `Labour suggestions divided by the productivity factor ${factor}, about +${Math.round((1 / factor - 1) * 100)}%. Already inside the suggested rates. Lines where you typed the labour are untouched, and this row computes only from suggestion-led lines.`,
+    });
+  }
+  if (quote.nightWorkPct != null) {
+    adjustments.push({
+      name: "Night work",
+      amount: (quote.nightWorkPct / 100) * labourSubtotal,
+      mode: "added",
+      explanation: `${quote.nightWorkPct}% on the labour subtotal of ${Math.round(labourSubtotal).toLocaleString("en-US")}, computed from labour as entered, including any values you typed.`,
+    });
+  }
+  for (const cv of quote.customVariables ?? []) {
+    let amount = 0;
+    let explanation = "";
+    if (cv.kind === "pct_labour") {
+      amount = (cv.value / 100) * labourSubtotal;
+      explanation = `${cv.value}% on the labour subtotal of ${Math.round(labourSubtotal).toLocaleString("en-US")}.`;
+    } else if (cv.kind === "pct_quote") {
+      amount = (cv.value / 100) * calculatedSubtotal;
+      explanation = `${cv.value}% on the quote subtotal of ${Math.round(calculatedSubtotal).toLocaleString("en-US")}.`;
+    } else if (cv.kind === "fixed") {
+      amount = cv.value;
+      explanation = `Fixed amount.`;
+    } else {
+      const days = quote.programmeDaysRequested ?? 0;
+      amount = cv.value * days;
+      explanation = `${cv.value} per calendar day x ${days} days from the deadline.`;
+    }
+    adjustments.push({ name: cv.name, amount, mode: "added", explanation });
+  }
+
+  const addedTotal = adjustments
+    .filter((a) => a.mode === "added")
+    .reduce((s, a) => s + a.amount, 0);
+  const calcWithProgramme = calculatedSubtotal + addedTotal;
+  const floorWithProgramme = floorSubtotal + programme.upliftTotal;
+
+  const materialSubtotal = includedBreakdowns.reduce((s, b) => {
+    const line = quote.lines.find((l) => l.id === b.lineId)!;
+    return s + b.materialPerUnit * (line.isRateOnly ? 0 : line.qty);
+  }, 0);
+
   return {
     lines,
     labourSuggestedTotal,
     labourJobTotal: jobTotal,
+    adjustments,
+    materialSubtotal,
     floorSubtotal,
     calculatedSubtotal,
     quotedSubtotal,

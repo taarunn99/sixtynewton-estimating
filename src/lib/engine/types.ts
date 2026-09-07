@@ -36,6 +36,11 @@ export interface EngineSettings {
   logisticsBargePerTon?: number;
   // Added to the tiling labour suggestion for wall installation (default 10)
   tilingWallUplift?: number;
+  // Occupied building productivity factor (default 0.85): labour suggestions
+  // divide by it, so 0.85 lifts them by about 18 percent
+  occupiedProductivityFactor?: number;
+  // Internal cash estimate collection factor (default 1.0)
+  collectionFactor?: number;
 }
 
 export interface FamilyRef {
@@ -103,6 +108,11 @@ export interface LineInputs {
   thicknessMm?: number;
   thicknessCm?: number;
   coats?: number;
+  // microtopping build-up: translated to thickness and coats by the engine
+  baseCoatMm?: number;
+  baseCoats?: number;
+  finishCoatMm?: number;
+  sealerCoats?: number;
   wastePct?: number;
   netUnitsPerPack?: number;
   lmPerPack?: number;
@@ -168,6 +178,31 @@ export interface QuoteInput {
   // it distributes across labour-bearing lines pro rata to their suggestions;
   // per-line labour overrides win over their share. Never a nudge target.
   labourJobTotal?: number | null;
+  // Working variables (UPDATE_VARIABLES_CASH.md section 1). They scale labour
+  // suggestions and produce named adjustment rows; never a nudge, never a
+  // change to labour the user typed.
+  occupiedBuilding?: boolean;
+  // Night work percent on the labour subtotal; null or undefined means off
+  nightWorkPct?: number | null;
+  // Per-quote override of working days per week for the programme maths
+  programmeDaysPerWeek?: number | null;
+  customVariables?: CustomVariable[];
+}
+
+export interface CustomVariable {
+  name: string;
+  kind: "pct_labour" | "pct_quote" | "fixed" | "per_day";
+  value: number;
+}
+
+// Named adjustment row in the totals block. "in rates" rows are already
+// inside the per-line suggested prices; "added" rows sit on top of the
+// calculated subtotal. Neither ever appears on the PDF as a row.
+export interface AdjustmentRow {
+  name: string;
+  amount: number;
+  mode: "in rates" | "added";
+  explanation: string;
 }
 
 // Labour per sqm anchors on tile area, floor installation. Interpolate
@@ -202,6 +237,10 @@ export interface HistoryPoint {
   quoteNumber: string;
   quoteDate: string;
   siteLabel?: string;
+  // Unit of the historical rate (sqm, lm, lump); unknown matches everything
+  unit?: string | null;
+  // True when the historical line was application only (client material)
+  applicationOnly?: boolean;
 }
 
 export interface Nudge {
@@ -230,6 +269,20 @@ export interface LineBreakdown {
   // The engine suggestion and where it came from, shown greyed beside the input
   labourSuggestedPerUnit: number;
   labourSource: LabourSource;
+  // Suggested price computed both ways (section 6): history median of matching
+  // accepted quote lines, and the engine cost build-up. History leads when at
+  // least 2 matches exist; both figures always shown in the (i).
+  priceHistory: {
+    median: number;
+    count: number;
+    matchLevel: "stage and family" | "stage" | "discipline";
+    approximate: boolean;
+    quotes: { quoteNumber: string; rate: number; date: string }[];
+  } | null;
+  priceEngine: number;
+  priceSourceUsed: "history" | "engine";
+  // History and engine differ by more than 25 percent (grey info, never a warning)
+  priceDiverges: boolean;
   consumablesPerUnit: number;
   equipmentPerUnit: number;
   // Reference only, never applied to the price
@@ -262,6 +315,10 @@ export interface QuoteTotals {
   labourSuggestedTotal: number;
   // The head contractor figure, echoed back when set
   labourJobTotal: number | null;
+  // Named adjustment rows from working variables
+  adjustments: AdjustmentRow[];
+  // Total material cost across included lines, for the internal cash strip
+  materialSubtotal: number;
   floorSubtotal: number;
   calculatedSubtotal: number;
   quotedSubtotal: number;

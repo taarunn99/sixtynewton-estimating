@@ -134,6 +134,9 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             discipline: s.discipline,
             unit: s.unit_of_sale ?? "sqm",
             hasDefaultProduct: !!s.default_family_id,
+            familyName: s.default_family_id
+              ? (familyOptions ?? []).find((f) => f.id === s.default_family_id)?.name
+              : undefined,
           }))}
           familyOptions={(familyOptions ?? []).map((f) => ({
             id: f.id,

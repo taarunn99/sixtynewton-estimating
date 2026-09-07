@@ -11,6 +11,7 @@ const NAV = [
   { href: "/admin/labour-tiers", label: "Labour tiers" },
   { href: "/admin/application-rates", label: "Application-only rates" },
   { href: "/admin/labour-reference", label: "Labour reference" },
+  { href: "/admin/suggestion-coverage", label: "Suggestion coverage" },
   { href: "/admin/site-profiles", label: "Site profiles" },
   { href: "/admin/settings", label: "Settings" },
 ];

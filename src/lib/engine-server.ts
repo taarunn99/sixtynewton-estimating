@@ -49,6 +49,12 @@ export type LedgerLine = {
   tileLengthMm: number | null;
   tileWidthMm: number | null;
   thicknessMm: number | null;
+  coats: number | null;
+  wastePct: number | null;
+  baseCoatMm: number | null;
+  baseCoats: number | null;
+  finishCoatMm: number | null;
+  sealerCoats: number | null;
   wallInstallation: boolean;
   // Labour as an input: effective value, the greyed suggestion and its source
   labour: {
@@ -58,6 +64,16 @@ export type LedgerLine = {
     absorbed: boolean;
     overridden: boolean;
   };
+  // Suggested price both ways (section 6)
+  priceHistory: {
+    median: number;
+    count: number;
+    matchLevel: string;
+    approximate: boolean;
+    quotes: { quoteNumber: string; rate: number; date: string }[];
+  } | null;
+  priceEngine: number;
+  priceSourceUsed: string;
   // Plain-language tooltips: how each number was derived
   derivation: { ourCost: string; suggested: string; labour: string };
 };
@@ -78,13 +94,21 @@ export type LedgerResult = {
     programmeDaysRequested: number | null;
     programmeHoursPerDay: number | null;
     programmeBaseCrewDays: number | null;
+    programmeDaysPerWeek: number | null;
     marginPct: number;
     noiseRestricted: boolean;
+    occupiedBuilding: boolean;
+    nightWorkPct: number | null;
+    customVariables: { name: string; kind: string; value: number }[];
+    paymentSplit: number[];
   };
   lines: LedgerLine[];
   totals: {
     labourSuggestedTotal: number;
     labourJobTotal: number | null;
+    adjustments: { name: string; amount: number; mode: string; explanation: string }[];
+    materialSubtotal: number;
+    collectionFactor: number;
     floorSubtotal: number;
     calculatedSubtotal: number;
     quotedSubtotal: number;
@@ -138,15 +162,16 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         .order("revision"),
       supabase
         .from("imported_quotes")
-        .select("stage_id, family_id, rate, quote_number, quote_date_text"),
+        .select("stage_id, family_id, rate, unit, quote_number, quote_date_text, client_site, notes"),
     ]);
   const [{ data: appRates }, { data: anchorRows }, { data: labourHistoryRows }] = await Promise.all([
     supabase.from("application_rates").select("*"),
     supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm, band_note, flag_note"),
-    // Past labour values: edited labour on lines of issued or revised quotes
+    // Accepted quote lines: past labour values and past rates for the
+    // history side of every suggestion
     supabase
       .from("quote_lines")
-      .select("stage_id, inputs, quotes!inner(status)")
+      .select("stage_id, family_id, unit, unit_price, inputs, quotes!inner(status, number, quote_date)")
       .in("quotes.status", ["issued", "revised", "won"])
       .not("stage_id", "is", null),
   ]);
@@ -198,6 +223,8 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     logisticsTruckCapacityTons: num(settingsRow!.logistics_truck_capacity_tons) ?? undefined,
     logisticsBargePerTon: num(settingsRow!.logistics_barge_per_ton) ?? undefined,
     tilingWallUplift: num(settingsRow!.tiling_wall_uplift) ?? undefined,
+    occupiedProductivityFactor: num(settingsRow!.occupied_productivity_factor) ?? undefined,
+    collectionFactor: num(settingsRow!.collection_factor) ?? undefined,
   };
 
   const familiesById = new Map<string, FamilyRef>(
@@ -318,18 +345,42 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     marginPct: num(quote.margin_pct) ?? undefined,
     overheadPct: num(quote.overhead_pct) ?? undefined,
     labourJobTotal: num(quote.labour_job_total),
+    occupiedBuilding: !!quote.occupied_building,
+    nightWorkPct: num(quote.night_work_pct),
+    programmeDaysPerWeek: num(quote.programme_days_per_week),
+    customVariables: Array.isArray(quote.custom_variables) ? quote.custom_variables : [],
   };
 
-  // History: imported observed rates by stage
-  const history: HistoryPoint[] = (importedRates ?? [])
-    .filter((r) => r.rate !== null)
-    .map((r) => ({
-      stageId: r.stage_id,
-      familyId: r.family_id,
-      unitPrice: Number(r.rate),
-      quoteNumber: r.quote_number ?? "",
-      quoteDate: r.quote_date_text ?? "",
-    }));
+  // History: imported observed rates plus accepted quote lines from this
+  // system. Both feed the history side of every suggestion (section 6).
+  const history: HistoryPoint[] = [
+    ...(importedRates ?? [])
+      .filter((r) => r.rate !== null)
+      .map((r) => ({
+        stageId: r.stage_id,
+        familyId: r.family_id,
+        unitPrice: Number(r.rate),
+        quoteNumber: r.quote_number ?? "",
+        quoteDate: r.quote_date_text ?? "",
+        siteLabel: r.client_site ?? undefined,
+        unit: r.unit ?? null,
+        applicationOnly: /application only/i.test(r.notes ?? ""),
+      })),
+    ...(labourHistoryRows ?? [])
+      .filter((r) => r.unit_price !== null && r.quotes)
+      .map((r) => {
+        const q = r.quotes as unknown as { number: string; quote_date: string };
+        return {
+          stageId: r.stage_id as string,
+          familyId: (r.family_id as string) ?? null,
+          unitPrice: Number(r.unit_price),
+          quoteNumber: q.number,
+          quoteDate: q.quote_date ?? "",
+          unit: (r.unit as string) ?? null,
+          applicationOnly: !!r.inputs?.materialByClient,
+        };
+      }),
+  ];
 
   const ref: ReferenceData = {
     settings,
@@ -361,11 +412,36 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       l.unit === "lump" && b.materialPerUnit < 1
         ? "Manual lump, no cost basis in the engine."
         : `Our cost ${r1(b.floorPerUnit)} = material ${r1(b.materialPerUnit)}${b.consumablesPerUnit ? ` + consumables ${r1(b.consumablesPerUnit)}` : ""} + overhead ${overheadPct}%. Labour is not in our cost; it is your input below.`;
-    const suggested = appOnly
-      ? `Suggested price ${b.calculatedPerUnit} is the labour figure; the client supplies material and application-only rates already carry margin.`
-      : l.unit === "lump" && b.materialPerUnit < 1 && b.labourPerUnit < 1
-        ? "Suggested price follows your price for manual lumps."
-        : `Suggested price ${b.calculatedPerUnit} = (material ${r1(b.materialPerUnit)} + labour ${r1(b.labourPerUnit)}) + overhead ${overheadPct}% + margin ${marginPct}%, rounded.`;
+    // Suggested price (i): both figures, always (section 6)
+    const engineSentence = appOnly
+      ? `engine: the labour figure ${b.priceEngine} (client supplies material, application-only rates carry margin)`
+      : `engine build-up gives ${b.priceEngine} (material ${r1(b.materialPerUnit)} + labour ${r1(b.labourPerUnit)} + overhead ${overheadPct}% + margin ${marginPct}%)`;
+    let suggested: string;
+    if (l.unit === "lump" && b.materialPerUnit < 1 && b.labourPerUnit < 1) {
+      suggested = "Suggested price follows your price for manual lumps.";
+    } else if (b.priceHistory) {
+      const cite = b.priceHistory.quotes
+        .map((q) => `${q.quoteNumber} at ${q.rate}`)
+        .join(", ");
+      const level =
+        b.priceHistory.matchLevel === "stage and family"
+          ? ""
+          : b.priceHistory.matchLevel === "stage"
+            ? " (no exact product match, same stage)"
+            : ` (no exact match, using ${b.priceHistory.count} quotes from the same discipline)`;
+      const approx = b.priceHistory.approximate
+        ? " Match on thickness or tile size is approximate."
+        : "";
+      const diverge = b.priceDiverges
+        ? " Past quotes and cost build-up differ here; past quotes used."
+        : "";
+      suggested =
+        b.priceSourceUsed === "history"
+          ? `Suggested ${b.calculatedPerUnit}: from ${b.priceHistory.count} past quotes${level} (median ${r1(b.priceHistory.median)}: ${cite}); ${engineSentence}.${approx}${b.priceDiverges ? diverge : ""}`
+          : `Suggested ${b.calculatedPerUnit} from the ${engineSentence}; only ${b.priceHistory.count} past quote (${cite}), so history does not lead.${approx}`;
+    } else {
+      suggested = `Suggested ${b.calculatedPerUnit} from the ${engineSentence}; no matching past quotes yet.`;
+    }
     const sourceNote =
       b.labourSource === "labour tier" && tier
         ? `labour tier (${tier.name.toLowerCase()} ${tier.applicationRatePerSqm ?? "?"}${multNote})`
@@ -401,6 +477,12 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       tileLengthMm: num(l.inputs?.tileLengthMm),
       tileWidthMm: num(l.inputs?.tileWidthMm),
       thicknessMm: num(l.inputs?.thicknessMm),
+      coats: num(l.inputs?.coats),
+      wastePct: num(l.inputs?.wastePct),
+      baseCoatMm: num(l.inputs?.baseCoatMm),
+      baseCoats: num(l.inputs?.baseCoats),
+      finishCoatMm: num(l.inputs?.finishCoatMm),
+      sealerCoats: num(l.inputs?.sealerCoats),
       wallInstallation: !!l.inputs?.wallInstallation,
       labour: {
         effective: b.labourPerUnit,
@@ -409,6 +491,9 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
         absorbed: b.labourSource === "absorbed",
         overridden: b.labourSource === "manual",
       },
+      priceHistory: b.priceHistory,
+      priceEngine: b.priceEngine,
+      priceSourceUsed: b.priceSourceUsed,
       derivation: { ourCost, suggested, labour: labourDerivation },
     };
   });
@@ -429,13 +514,21 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       programmeDaysRequested: num(quote.programme_days_requested),
       programmeHoursPerDay: num(quote.programme_hours_per_day),
       programmeBaseCrewDays: num(quote.programme_base_crew_days),
+      programmeDaysPerWeek: num(quote.programme_days_per_week),
       marginPct: num(quote.margin_pct) ?? settings.defaultMargin,
       noiseRestricted: siteProfile.noiseRestricted,
+      occupiedBuilding: !!quote.occupied_building,
+      nightWorkPct: num(quote.night_work_pct),
+      customVariables: Array.isArray(quote.custom_variables) ? quote.custom_variables : [],
+      paymentSplit: Array.isArray(quote.payment_split) ? quote.payment_split : [50, 40, 10],
     },
     lines: ledgerLines,
     totals: {
       labourSuggestedTotal: totals.labourSuggestedTotal,
       labourJobTotal: totals.labourJobTotal,
+      adjustments: totals.adjustments,
+      materialSubtotal: totals.materialSubtotal,
+      collectionFactor: settings.collectionFactor ?? 1,
       floorSubtotal: totals.floorSubtotal,
       calculatedSubtotal: totals.calculatedSubtotal,
       quotedSubtotal: totals.quotedSubtotal,

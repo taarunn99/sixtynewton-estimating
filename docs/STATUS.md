@@ -47,6 +47,15 @@ Pending in phase 2:
 - New quote flow at /quotes/new: client (existing or new), site, site profile, payment terms; takes the next QT number; starts as an empty R1 draft.
 - Not done: Zoho Estimates push (spec marks it optional), import of the remaining 24 past quote PDFs (tooling pattern exists in scripts/import-qt299.ts).
 
+## Variables, quotability, cash, history (2 Sep 2026, docs/UPDATE_VARIABLES_CASH.md)
+
+- Variables panel v2: every variable shows its live AED effect and lands as a named adjustment row in totals with an (i). Built in: programme compression (site hours, deadline, days per week, crew-days), occupied building (productivity 0.85, suggestions +18%, typed labour untouched), night work (+10% on labour subtotal, editable), custom variables (percent on labour, percent on quote, fixed, per calendar day). No nudges from variables; nothing reaches the PDF as a row.
+- Quotability: stage picker searches name, discipline, default family and trade aliases (micro, loft, ultratop all hit microtopping). Free-entry thickness (decimals), coats, waste, tile size, microtopping build-up (base mm x coats, finish mm, sealer coats). Default families linked for microtopping, SL, screed, repair and design concrete stages that had none. Cross-discipline, vinyl and polishing stages are labour-only by data.
+- Internal cash strip under totals, never on the PDF: payment split editor (50/40/10 default, 60/30/10 preset), milestone amounts on your price total including VAT, material cost and the advance-covers-material line, collection factor from settings.
+- References corrected: visa 700 per person per month (flag resolved), salaried all-in about 2,500 per month or 96 per day, crew 480 to 530 per day (19 to 21 per sqm), tile band 60x120 resolved at 50 to 75 midpoint 65, consumables noted at about 25 per crew-day and covered inside the application rate (out of the floor and the price build-up), equipment owned and ignored, pickup cost removed from settings.
+- History and engine both stand behind every suggestion: suggested price is the median of matching past quotes when at least 2 matches exist (stage and family, widening to stage then discipline, approximations noted), engine build-up otherwise, both always in the (i) with quote numbers. The original 50 imported rates are now stage-mapped (54 of 67 points mapped; the rest are lumps and bundles). Live tests pin QT-000261 behind tiling, QT-000293 behind bitumen, QT-000298/300 behind SL.
+- Assistant: search_history answers what we charged anyone from structured history (Azizi bitumen returns the two QT-000293 rates); propose_labour returns the suggestion with cited quotes and writes the line only after the user accepts. Admin, Suggestion coverage shows history points per stage: 21 of 93 stages covered, 72 at zero.
+
 ## Labour model redesign (2 Sep 2026, docs/UPDATE_LABOUR_MODEL.md)
 
 - Labour is a per-line editable input prefilled with a suggestion (greyed until edited, source named in the (i)): past quote-line labour medians first, then the tile ladder or application-only rate table, then the labour tier. No nudges ever fire on labour.
