@@ -201,15 +201,21 @@ function LineRow({
   const [expanded, setExpanded] = useState(false);
   const [qty, setQty] = useState(String(line.qty));
   const [quoted, setQuoted] = useState(line.quoted === null ? "" : String(line.quoted));
-  // Optimistic include state: the tick flips instantly, the engine recompute
+  // Optimistic states: every tick flips instantly, the engine recompute
   // streams in behind it. Server truth wins when the new ledger arrives.
   const [included, setIncluded] = useState(line.included);
+  const [absorbed, setAbsorbed] = useState(line.labour.absorbed);
+  const [matByClient, setMatByClient] = useState(line.materialByClient);
+  const [wall, setWall] = useState(line.wallInstallation);
   const [pending, startTransition] = useTransition();
   const isLump = line.unit === "lump";
 
   useEffect(() => setQty(String(line.qty)), [line.qty]);
   useEffect(() => setQuoted(line.quoted === null ? "" : String(line.quoted)), [line.quoted]);
   useEffect(() => setIncluded(line.included), [line.included]);
+  useEffect(() => setAbsorbed(line.labour.absorbed), [line.labour.absorbed]);
+  useEffect(() => setMatByClient(line.materialByClient), [line.materialByClient]);
+  useEffect(() => setWall(line.wallInstallation), [line.wallInstallation]);
 
   const save = (patch: Parameters<typeof updateLine>[1]) =>
     startTransition(async () => {
@@ -301,7 +307,7 @@ function LineRow({
             </div>
             <div className="flex flex-wrap items-center gap-3 tabular-nums">
               <label className="text-[#8A929C]">Labour per {line.unit}</label>
-              {line.labour.absorbed ? (
+              {absorbed ? (
                 <span className="text-[#8A929C]">labour absorbed</span>
               ) : (
                 <input
@@ -322,7 +328,7 @@ function LineRow({
                   }`}
                 />
               )}
-              {!line.labour.overridden && !line.labour.absorbed ? (
+              {!line.labour.overridden && !absorbed ? (
                 <span className="text-[#8A929C]">
                   {line.labour.source === "job total" ? "from job total" : "suggested"}
                   <Info text={line.derivation.labour} />
@@ -347,8 +353,11 @@ function LineRow({
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input
                     type="checkbox"
-                    checked={line.labour.absorbed}
-                    onChange={(e) => save({ inputs: { absorbLabour: e.target.checked } })}
+                    checked={absorbed}
+                    onChange={(e) => {
+                      setAbsorbed(e.target.checked);
+                      save({ inputs: { absorbLabour: e.target.checked } });
+                    }}
                     className="accent-[#1F2328]"
                   />
                   Absorb labour in margin
@@ -357,8 +366,11 @@ function LineRow({
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input
                     type="checkbox"
-                    checked={line.materialByClient}
-                    onChange={(e) => save({ inputs: { materialByClient: e.target.checked } })}
+                    checked={matByClient}
+                    onChange={(e) => {
+                      setMatByClient(e.target.checked);
+                      save({ inputs: { materialByClient: e.target.checked } });
+                    }}
                     className="accent-[#1F2328]"
                   />
                   Material by client
@@ -425,8 +437,11 @@ function LineRow({
                   <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                       type="checkbox"
-                      checked={line.wallInstallation}
-                      onChange={(e) => save({ inputs: { wallInstallation: e.target.checked } })}
+                      checked={wall}
+                      onChange={(e) => {
+                        setWall(e.target.checked);
+                        save({ inputs: { wallInstallation: e.target.checked } });
+                      }}
                       className="accent-[#1F2328]"
                     />
                     Wall installation

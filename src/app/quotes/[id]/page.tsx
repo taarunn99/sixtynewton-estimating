@@ -15,7 +15,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   if (!ledger) notFound();
 
   const supabase = await createClient();
-  const [{ data: allQuotes }, { data: stageOptions }, { data: familyOptions }, { data: quoteRow }] = await Promise.all([
+  const [{ data: allQuotes }, { data: stageOptions }, { data: familyOptions }, { data: quoteRow }, { data: followUps }] = await Promise.all([
     supabase
       .from("quotes")
       .select("id, number, revision, status, quote_date, clients(name)")
@@ -27,13 +27,13 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       .order("sort_order"),
     supabase.from("product_families").select("id, name, discipline, brand").order("name"),
     supabase.from("quotes").select("client_id").eq("id", id).single(),
+    supabase
+      .from("quote_followups")
+      .select("at, note")
+      .eq("quote_id", id)
+      .order("at", { ascending: false })
+      .limit(20),
   ]);
-  const { data: followUps } = await supabase
-    .from("quote_followups")
-    .select("at, note")
-    .eq("quote_id", id)
-    .order("at", { ascending: false })
-    .limit(20);
 
   const byClient = new Map<string, NonNullable<typeof allQuotes>>();
   for (const q of allQuotes ?? []) {

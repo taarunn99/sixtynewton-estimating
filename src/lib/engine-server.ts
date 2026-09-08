@@ -141,7 +141,7 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
     .maybeSingle();
   if (!quote) return null;
 
-  const [{ data: lines }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: revisions }, { data: importedRates }] =
+  const [{ data: lines }, { data: settingsRow }, { data: famRows }, { data: tierRows }, { data: stageRows }, { data: profileRow }, { data: revisions }, { data: importedRates }, { data: appRates }, { data: anchorRows }, { data: labourHistoryRows }] =
     await Promise.all([
       supabase.from("quote_lines").select("*").eq("quote_id", quoteId).order("sort"),
       supabase.from("settings").select("*").single(),
@@ -163,18 +163,16 @@ export async function computeLedger(quoteId: string): Promise<LedgerResult | nul
       supabase
         .from("imported_quotes")
         .select("stage_id, family_id, rate, unit, quote_number, quote_date_text, client_site, notes"),
+      supabase.from("application_rates").select("*"),
+      supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm, band_note, flag_note"),
+      // Accepted quote lines: past labour values and past rates for the
+      // history side of every suggestion
+      supabase
+        .from("quote_lines")
+        .select("stage_id, family_id, unit, unit_price, inputs, quotes!inner(status, number, quote_date)")
+        .in("quotes.status", ["issued", "revised", "won"])
+        .not("stage_id", "is", null),
     ]);
-  const [{ data: appRates }, { data: anchorRows }, { data: labourHistoryRows }] = await Promise.all([
-    supabase.from("application_rates").select("*"),
-    supabase.from("tile_labour_anchors").select("tile_area_sqm, labour_per_sqm, band_note, flag_note"),
-    // Accepted quote lines: past labour values and past rates for the
-    // history side of every suggestion
-    supabase
-      .from("quote_lines")
-      .select("stage_id, family_id, unit, unit_price, inputs, quotes!inner(status, number, quote_date)")
-      .in("quotes.status", ["issued", "revised", "won"])
-      .not("stage_id", "is", null),
-  ]);
   const appRateById = new Map((appRates ?? []).map((r) => [r.id, r]));
   const tileLabourAnchors = (anchorRows ?? []).map((a) => ({
     areaSqm: Number(a.tile_area_sqm),
